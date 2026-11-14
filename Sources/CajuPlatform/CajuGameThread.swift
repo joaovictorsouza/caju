@@ -40,20 +40,22 @@ public final class CajuGameThread: @unchecked Sendable {
         #else
             var created: pthread_t = 0
         #endif
-        let code = pthread_create(&created, nil, { argument in
-            #if canImport(Darwin)
-                let box = Unmanaged<Box>.fromOpaque(argument).takeRetainedValue()
-            #else
-                let box = Unmanaged<Box>.fromOpaque(argument!).takeRetainedValue()
-            #endif
-            #if canImport(Darwin)
-                _ = pthread_setname_np(box.name)
-            #else
-                _ = pthread_setname_np(pthread_self(), box.name)
-            #endif
-            box.body()
-            return nil
-        }, box.toOpaque())
+        let code = pthread_create(
+            &created, nil,
+            { argument in
+                #if canImport(Darwin)
+                    let box = Unmanaged<Box>.fromOpaque(argument).takeRetainedValue()
+                #else
+                    let box = Unmanaged<Box>.fromOpaque(argument!).takeRetainedValue()
+                #endif
+                #if canImport(Darwin)
+                    _ = pthread_setname_np(box.name)
+                #else
+                    _ = pthread_setname_np(pthread_self(), box.name)
+                #endif
+                box.body()
+                return nil
+            }, box.toOpaque())
         guard code == 0 else {
             box.release()
             throw .threadCreationFailed(code: code)

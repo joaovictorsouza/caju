@@ -74,18 +74,18 @@
         }
     }
 
-fileprivate final class CajuAndroidActivityState: @unchecked Sendable {
-    let channel: CajuPlatformChannel
-    var thread: CajuGameThread?
-    init(channel: CajuPlatformChannel) { self.channel = channel }
-}
+    private final class CajuAndroidActivityState: @unchecked Sendable {
+        let channel: CajuPlatformChannel
+        var thread: CajuGameThread?
+        init(channel: CajuPlatformChannel) { self.channel = channel }
+    }
 
-private func stateOf(_ activity: UnsafeMutablePointer<ANativeActivity>?) -> CajuAndroidActivityState? {
-    guard let raw = activity?.pointee.instance else { return nil }
-    return Unmanaged<CajuAndroidActivityState>.fromOpaque(raw).takeUnretainedValue()
-}
+    private func stateOf(_ activity: UnsafeMutablePointer<ANativeActivity>?) -> CajuAndroidActivityState? {
+        guard let raw = activity?.pointee.instance else { return nil }
+        return Unmanaged<CajuAndroidActivityState>.fromOpaque(raw).takeUnretainedValue()
+    }
 
-private func push(_ activity: UnsafeMutablePointer<ANativeActivity>?, _ event: CajuPlatformEvent) {
-    stateOf(activity)?.channel.events.push(event)
-}
+    private func push(_ activity: UnsafeMutablePointer<ANativeActivity>?, _ event: CajuPlatformEvent) {
+        stateOf(activity)?.channel.events.push(event)
+    }
 #endif

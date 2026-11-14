@@ -29,11 +29,13 @@
                 guard AInputEvent_getType(event) == Int32(AINPUT_EVENT_TYPE_MOTION) else { continue }
                 let action = AMotionEvent_getAction(event)
                 let masked = action & Int32(AMOTION_EVENT_ACTION_MASK)
-                let index = Int((action & Int32(AMOTION_EVENT_ACTION_POINTER_INDEX_MASK))
-                    >> Int32(AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT))
+                let index = Int(
+                    (action & Int32(AMOTION_EVENT_ACTION_POINTER_INDEX_MASK))
+                        >> Int32(AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT))
                 let phase: CajuTouchPhase
                 switch masked {
-                case Int32(AMOTION_EVENT_ACTION_DOWN), Int32(AMOTION_EVENT_ACTION_POINTER_DOWN): phase = .began
+                case Int32(AMOTION_EVENT_ACTION_DOWN), Int32(AMOTION_EVENT_ACTION_POINTER_DOWN):
+                    phase = .began
                 case Int32(AMOTION_EVENT_ACTION_UP), Int32(AMOTION_EVENT_ACTION_POINTER_UP): phase = .ended
                 case Int32(AMOTION_EVENT_ACTION_CANCEL): phase = .cancelled
                 case Int32(AMOTION_EVENT_ACTION_MOVE): phase = .moved
