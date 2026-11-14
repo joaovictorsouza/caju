@@ -1,5 +1,5 @@
+import SwiftSyntaxMacroExpansion
 import SwiftSyntaxMacros
-import SwiftSyntaxMacrosGenericTestSupport
 import SwiftSyntaxMacrosTestSupport
 import XCTest
 
