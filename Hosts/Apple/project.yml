@@ -13,10 +13,16 @@ targets:
   CajuHost-iOS:
     type: application
     platform: iOS
-    sources: [Sources]
+    sources: [Sources, Shaders/Generated]
     dependencies:
       - package: Caju
         product: CajuMath
+      - package: Caju
+        product: CajuPlatform
+      - package: Caju
+        product: CajuRHI
+      - package: Caju
+        product: CajuRHIMetal
     settings:
       base:
         SWIFT_VERSION: "6.0"
@@ -27,10 +33,16 @@ targets:
   CajuHost-macOS:
     type: application
     platform: macOS
-    sources: [Sources]
+    sources: [Sources, Shaders/Generated]
     dependencies:
       - package: Caju
         product: CajuMath
+      - package: Caju
+        product: CajuPlatform
+      - package: Caju
+        product: CajuRHI
+      - package: Caju
+        product: CajuRHIMetal
     settings:
       base:
         SWIFT_VERSION: "6.0"
