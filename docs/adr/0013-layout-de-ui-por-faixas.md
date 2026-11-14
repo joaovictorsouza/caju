@@ -1,4 +1,4 @@
-# ADR 0011: Layout de UI por faixas de tamanho (P-4)
+# ADR 0013: Layout de UI por faixas de tamanho (P-4)
 
 **Status:** Aceito. Detalha o item "layout no estilo SwiftUI" do [ADR 0002](0002-ui-declarativa.md).
 

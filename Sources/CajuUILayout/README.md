@@ -1,6 +1,6 @@
 # CajuUILayout
 
-Árvore retida e layout de UI, sem GPU e sem Foundation. Decisões: [ADR 0002](../../docs/adr/0002-ui-declarativa.md) e [ADR 0011](../../docs/adr/0011-layout-de-ui-por-faixas.md).
+Árvore retida e layout de UI, sem GPU e sem Foundation. Decisões: [ADR 0002](../../docs/adr/0002-ui-declarativa.md) e [ADR 0013](../../docs/adr/0013-layout-de-ui-por-faixas.md).
 
 - **Camada:** 1 (dependências só para baixo; ver §5 do plano).
 - **Trilha dona:** P-4.
