@@ -101,7 +101,7 @@ let layoutResults = [
         layoutTree.invalidate()
         layoutTree.layout(in: CajuVec2(1000, 2000))
         return Float(i & 1)
-    },
+    }
 ]
 
 // MARK: ECS (NFR-008: ≥ 100 000 entidades × 3 componentes por consulta em < 2 ms no aparelho alto (?))
