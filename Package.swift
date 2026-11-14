@@ -62,10 +62,17 @@ let package = Package(
         module("CajuUILayout", ["CajuMath", "CajuCollections"]),
         module("CajuPhysicsSpatial", ["CajuMath", "CajuCollections"]),
         // Camada 2 (plataforma e GPU)
-        module("CajuPlatform", ["CajuCore"]),
+        module(
+            "CajuPlatform",
+            ["CajuCore", .target(name: "CVulkan", condition: .when(platforms: [.android]))]
+        ),
         module("CajuRHI", ["CajuCore", "CajuMath"]),
         module("CajuRHIMetal", ["CajuRHI"]),
-        module("CajuRHIVulkan", ["CajuRHI"]),
+        // Vulkan só existe no Android: o CVulkan (system library) é condicional.
+        module(
+            "CajuRHIVulkan",
+            ["CajuRHI", .target(name: "CVulkan", condition: .when(platforms: [.android]))]
+        ),
         // Camada 3
         module("CajuScene", ["CajuCore", "CajuMath"]),
         module("CajuInput", ["CajuCore", "CajuMath", "CajuPlatform"]),
@@ -79,6 +86,9 @@ let package = Package(
         module("CajuNet", ["CajuCore"]),
         module("CajuTesting", ["CajuCore"]),
         module("CajuScripting", ["CajuCore"]),
+
+        // Cabeçalhos Vulkan/NDK do sistema (só Android; Sources/CVulkan).
+        .systemLibrary(name: "CVulkan"),
 
         // Ferramentas
         .executableTarget(
@@ -111,6 +121,16 @@ let package = Package(
         .testTarget(
             name: "CajuUILayoutTests",
             dependencies: ["CajuUILayout", "CajuMath", "CajuTesting"],
+            swiftSettings: common
+        ),
+        .testTarget(
+            name: "CajuPlatformTests",
+            dependencies: ["CajuPlatform"],
+            swiftSettings: common
+        ),
+        .testTarget(
+            name: "CajuRHIVulkanTests",
+            dependencies: ["CajuRHIVulkan"],
             swiftSettings: common
         ),
         .testTarget(
