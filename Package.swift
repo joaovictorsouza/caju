@@ -104,6 +104,11 @@ let package = Package(
             swiftSettings: common
         ),
         .testTarget(
+            name: "CajuTextTests",
+            dependencies: ["CajuText", "CajuMath", "CajuTesting"],
+            swiftSettings: common
+        ),
+        .testTarget(
             name: "CajuTestingTests",
             dependencies: ["CajuTesting"],
             swiftSettings: common
