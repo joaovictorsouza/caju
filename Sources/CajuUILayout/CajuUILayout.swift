@@ -1,5 +1,5 @@
-/// Árvore retida e layout de UI, sem GPU.
+/// Árvore retida e layout de UI, sem GPU. A API está em ``CajuLayoutTree``.
 ///
-/// Módulo declarado no M0; a implementação chega na trilha dona deste diretório
-/// (ver `docs/planejamento-engine.md`). Este tipo existe só para o alvo compilar.
+/// O marcador existe desde o M0 (o alvo `CajuModulesTests` o referencia) e continua para não alterar
+/// outro diretório; sai quando esse teste deixar de precisar dele.
 public enum CajuUILayoutModule {}
