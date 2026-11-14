@@ -22,5 +22,16 @@ Matemática 3D de `Float` (SIMD, mão direita, coluna-maior `M * v`). Sem Founda
 `swift test --filter CajuMathTests` (propriedade com PCG semeado, 10 000 casos por teste) e
 `swift run -c release caju-bench` para o harness de benchmark.
 
-## Pendências
-- Benchmarks de `inverse`, `slerp`, ray×AABB/triângulo ainda não estão em `caju-bench` (`Sources/CajuBenchmarks` é do harness; pedir inclusão).
+## Benchmarks (`caju-bench`, suíte `CajuMath`)
+Medido em Apple M1 (macOS, `swift run -c release caju-bench`, menor de 5 amostras, 1 execução; **não** é linha de base de aparelho de referência):
+
+| Operação | ns/op |
+|---|---|
+| `mat4.mul` | 4,0 |
+| `mat4.inverse` | 22,0 |
+| `mat4.inverseAffine` | 16,8 |
+| `quat.slerp` | 24,8 |
+| `ray.intersects(aabb)` | 7,5 |
+| `ray.intersectsTriangle` | 12,5 |
+
+Pendente: medir em iPhone 16 Pro / Galaxy S22 (ADR 0007) para o gate de 10 %.

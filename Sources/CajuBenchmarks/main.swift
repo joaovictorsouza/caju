@@ -42,6 +42,10 @@ func measure(_ name: String, iterations: Int, _ body: (Int) -> Float) -> Result 
 let q = CajuQuat(axis: CajuVec3(1, 2, 3), radians: 0.7) ?? .identity
 let m = CajuMat4.rotation(q) * CajuMat4.translation(CajuVec3(1, 2, 3))
 let n = 1_000_000
+let benchBox = CajuAABB(min: CajuVec3(0, 0, 0), max: CajuVec3(8, 1, 1))
+let benchA = CajuVec3(0, 0, 0)
+let benchB = CajuVec3(1, 0, 0)
+let benchC = CajuVec3(0, 1, 0)
 
 /// Árvore de UI de ~1 000 nós (50 linhas × 19 folhas + `Spacer`) para o NFR-009.
 func makeLayoutTree() -> CajuLayoutTree {
@@ -69,6 +73,25 @@ let mathResults = [
     },
     measure("mat4.mul", iterations: n) { i in
         (m * CajuMat4.translation(CajuVec3(Float(i & 7), 0, 0))).c3.x
+    },
+    measure("mat4.inverse", iterations: n) { i in
+        let a = m * CajuMat4.translation(CajuVec3(Float(i & 7), 0, 0))
+        return a.inverse?.c3.x ?? 0
+    },
+    measure("mat4.inverseAffine", iterations: n) { i in
+        let a = m * CajuMat4.translation(CajuVec3(Float(i & 7), 0, 0))
+        return a.inverseAffine?.c3.x ?? 0
+    },
+    measure("quat.slerp", iterations: n) { i in
+        CajuQuat.slerp(.identity, q, t: Float(i & 15) / 16).x
+    },
+    measure("ray.intersects(aabb)", iterations: n) { i in
+        let ray = CajuRay(origin: CajuVec3(Float(i & 7), -5, 0.5), direction: CajuVec3(0, 1, 0))
+        return ray.intersects(benchBox) ?? 0
+    },
+    measure("ray.intersectsTriangle", iterations: n) { i in
+        let ray = CajuRay(origin: CajuVec3(0.1 + Float(i & 3) * 0.1, 0.2, -1), direction: CajuVec3(0, 0, 1))
+        return ray.intersectsTriangle(benchA, benchB, benchC, backfaceCulling: false)?.t ?? 0
     },
 ]
 

@@ -84,7 +84,7 @@ Escopo original:
 | **TB-1** | `CajuCore`, `CajuScene` | ECS mínimo híbrido, `Query` com PoC de packs + SIL, agendador single-thread com validação de acesso, mensagens, estados, tempo, `componentID` estático por protocolo (macro `@Component` adiada: exige `swift-syntax`; [ADR 0014](adr/0014-ecs-query-e-component.md)), Transform/hierarquia |
 | **TB-2** | `CajuPlatform`, `CajuRHI`, backend Metal | Janela iOS/macOS, RHI com render pass + transient + frame graph, Slang → MSL, cubo e botão com texto em aparelho real |
 | **TB-Android** | Platform Android, backend Vulkan | Gradle/CMake/JNI/`libswiftCore.so`, Game Thread, Vulkan próprio + VMA no S22; **timebox de 5 dias**, kill-criteria definidos antes de começar |
-| **P-1** | `CajuMath` completo | SIMD, interseções, cor, easing, testes de propriedade (**código e testes entregues**; falta benchmark no harness) |
+| **P-1** | `CajuMath` completo | SIMD, interseções, cor, easing, testes de propriedade (**entregue**: código, testes e benchmarks no `caju-bench`; medidas em M1 no README do módulo, falta linha de base em aparelho) |
 | **P-2** | `CajuAssetsCore` | glTF (validação rigorosa), KTX2/Basis, meshopt, PNG/JPEG, *fuzz*. Feito em Swift puro, exceto transcodificação Basis/Zstd e pixels JPEG (pendentes; ADR 0017) |
 | **P-3** | `CajuPhysicsSpatial` | BVH dinâmica e de triângulos, raycast/shapecast/sobreposição (**implementado**; testes em `CajuModulesTests`, benchmark pendente `(?)`, [ADR 0018](adr/0018-bvh-e-primitivas-espaciais.md)) |
 | **P-4** | `CajuUILayout` | Árvore retida, layout SwiftUI-like por faixas de tamanho ([ADR 0013](adr/0013-layout-de-ui-por-faixas.md)), stacks/ZStack/frame/padding/Spacer, hit-testing. **Implementado** (benchmark/testes dependem de PR de `Package.swift`) |
