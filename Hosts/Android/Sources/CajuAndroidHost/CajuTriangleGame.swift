@@ -18,7 +18,7 @@
 
         mutating func surfaceCreated(_ window: CajuNativeWindow) {
             do {
-                try renderer?.attach(window: window)
+                try renderer?.attach(window: window.raw)
                 failed = false
                 cajuLog("superfície criada")
             } catch {

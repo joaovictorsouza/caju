@@ -1,7 +1,6 @@
 #if os(Android)
     import Android
     import CVulkan
-    import CajuPlatform
 
     /// Ponteiro C estático de um literal (sem alocar).
     private func cString(_ string: StaticString) -> UnsafePointer<CChar> {
@@ -38,7 +37,7 @@
         private var frameIndex = 0
 
         // Dependentes da superfície.
-        private var window: CajuNativeWindow?
+        private var window: UnsafeMutableRawPointer?
         private var surface: VkSurfaceKHR?
         private var swapchain: VkSwapchainKHR?
         private var swapchainFormat = VK_FORMAT_UNDEFINED
@@ -91,12 +90,12 @@
         // MARK: Ciclo de vida da superfície
 
         /// Cria superfície, (na primeira vez) o dispositivo, e a swapchain.
-        public func attach(window newWindow: CajuNativeWindow) throws(CajuVulkanError) {
+        public func attach(window newWindow: UnsafeMutableRawPointer) throws(CajuVulkanError) {
             detach()
             window = newWindow
             var info = VkAndroidSurfaceCreateInfoKHR()
             info.sType = VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR
-            info.window = OpaquePointer(newWindow.raw)
+            info.window = OpaquePointer(newWindow)
             var created: VkSurfaceKHR?
             try check(vkCreateAndroidSurfaceKHR(instance, &info, nil, &created), .surface)
             surface = created
