@@ -51,10 +51,24 @@ let package = Package(
         .library(name: "CajuScripting", targets: ["CajuScripting"]),
         .executable(name: "caju-bench", targets: ["CajuBenchmarks"]),
     ],
+    dependencies: [
+        // Só para a macro @Component (roda no host, não entra no binário do jogo; ADR 0020).
+        .package(url: "https://github.com/swiftlang/swift-syntax.git", exact: "602.0.0")
+    ],
     targets: [
+        // Plugin de macros (compilado para o host). Sem README no alvo: ver Sources/CajuCore/README.md.
+        .macro(
+            name: "CajuMacrosPlugin",
+            dependencies: [
+                .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+                .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
+            ],
+            swiftSettings: common
+        ),
+
         // Camada 0 (puros)
         module("CajuMath", []),
-        module("CajuCore", []),
+        module("CajuCore", ["CajuMacrosPlugin"]),
         module("CajuCollections", []),
         // Camada 1 (puros)
         module("CajuAssetsCore", ["CajuMath", "CajuCollections"]),
@@ -101,6 +115,15 @@ let package = Package(
         .testTarget(
             name: "CajuMathTests",
             dependencies: ["CajuMath", "CajuTesting"],
+            swiftSettings: common
+        ),
+        .testTarget(
+            name: "CajuMacrosPluginTests",
+            dependencies: [
+                "CajuMacrosPlugin",
+                .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+                .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax"),
+            ],
             swiftSettings: common
         ),
         .testTarget(

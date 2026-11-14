@@ -20,6 +20,8 @@ O compilador especializa o `forEach` por pack, mas dentro do laço os termos con
 4. `BitwiseCopyable` é obrigatório porque as colunas movem bytes sem ARC/`deinit` (sem alocação e sem *witness* no `despawn`/mover). `CajuMath` ainda não declara `BitwiseCopyable` em `CajuVec3`/`CajuQuat`; `CajuTransform` guarda `SIMD` e expõe os tipos do `CajuMath` por acessores. Sugestão para o dono do `CajuMath`: conformar os tipos públicos a `BitwiseCopyable`.
 5. Agendador: `CajuSystemContext` valida cada consulta contra `reads`/`writes` declarados (`CajuAccessError`); `build()` ordena por estágio com arestas de conflito (W×W, W×R) e `after:` explícito, em níveis (`batches`) que serão a base de paralelização futura. Mudança estrutural só por `CajuCommandBuffer` nos pontos de sincronização entre estágios (e `CajuWorld` recusa spawn/despawn durante consulta).
 
+**Atualização:** a macro `@Component(id:)` foi adicionada pelo [ADR 0020](0020-macro-component.md); o protocolo e o `componentID` estático continuam sendo o contrato.
+
 ## Alternativas
 - Só packs: ~10× mais lento no laço (acima).
 - Macro `@Component` agora: depende de `swift-syntax`; adiado.

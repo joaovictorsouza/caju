@@ -30,7 +30,7 @@ public typealias CajuTagID = CajuComponentID
 /// Dado associado a uma entidade, guardado em colunas SoA do arquétipo.
 ///
 /// `BitwiseCopyable` é obrigatório: as colunas movem bytes sem `deinit` nem ARC.
-/// O `componentID` é estático e único por tipo (a macro `@Component` o gerará no futuro; ADR 0003).
+/// O `componentID` é estático e único por tipo (a macro `@Component(id:)` o gera; ADR 0020).
 public protocol CajuComponent: BitwiseCopyable, Sendable {
     static var componentID: CajuComponentID { get }
 }
