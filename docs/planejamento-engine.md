@@ -1,7 +1,7 @@
 # Caju: planejamento da engine 3D em Swift (v2)
 
 > **Status:** v2, integra o plano original, a discussão de arquitetura com o Argon e as decisões do dono (2026-11-14). Justificativas detalhadas ficam nos [ADRs](adr/README.md); este documento é a **visão atual**. O rascunho `engine-swift-especificacao.md` continua como **catálogo de requisitos**, não como contrato: qualquer restrição dele pode ser trocada por algo melhor.
-> Estimativas marcadas com (?) não foram medidas. Nenhum código da engine existe ainda.
+> Estimativas marcadas com (?) não foram medidas. **M0 implementado** (pacote, CI, host, `CajuMath` primitivo; [ADR 0010](adr/0010-fundacao-m0.md)); os demais módulos são só declarados.
 > Padrões e regras de documentação viva: [`CLAUDE.md`](../CLAUDE.md) e [`docs/standards/`](standards/README.md). **Este documento deve ser atualizado a cada mudança que altere escopo, ordem, marcos, riscos ou decisões.**
 > Histórico: [discussao-arquitetura-argon.md](discussao-arquitetura-argon.md).
 
@@ -72,7 +72,10 @@ Nenhuma sessão de engine começa antes de este passo ser aceito (merge). Entreg
 5. **Impor no CI no M0** o que for automatizável (swift-format, lint, `-warnings-as-errors`, TSan, tamanho, benchmarks).
 Primeira versão de 1 a 4 já está no PR #1. Avaliação de terceiros concluída em 2026-11-14: adotadas `swift-concurrency-pro` e `swift-testing-expert` (versão fixada, ver `docs/standards/README.md`); falta o aceite do dono do M-1.
 
-### M0: fundação (sequencial, 1 sessão)
+### M0: fundação (sequencial, 1 sessão) — **entregue**
+Estado: ver [ADR 0010](adr/0010-fundacao-m0.md). Entregue: `Package.swift` com 22 targets de módulo (+ `CajuBenchmarks`), CI (lint, Linux, macOS/iOS; Android e host Apple experimentais), `Hosts/Apple`, `CajuMath` (`Vec2/3/4`, `Quat`, `Mat4`), `CajuTesting` (PRNG semeável, fuzz), `caju-bench`, `CODEOWNERS`, prefixo `Caju*`. Pendente após M0: tornar `android` e `apple-host` obrigatórios; linha de base de benchmark em aparelho; swift-format já imposto, SwiftLint avaliado e não adotado.
+
+Escopo original:
 `Package.swift` com todos os targets (trancado depois), CI Linux/macOS + build iOS/Android aplicando os padrões do M-1, host iOS/macOS, tipos primitivos de `CajuMath`, `CODEOWNERS`, template de PR com o *definition of done*, harness de benchmark e fuzz, renomear prefixo `Caju*`.
 
 ### Onda 0.5: em paralelo (≈ 8 sessões)
@@ -88,6 +91,8 @@ Primeira versão de 1 a 4 já está no PR #1. Avaliação de terceiros concluíd
 | **P-5** | `CajuText` | Shaping, medida, quebra de linha, atlas MSDF em bitmap de CPU, modelo do `TextEditor` |
 
 P-1 a P-5 não dependem de GPU nem de ECS e têm contrato estável (dados de entrada → dados de saída), por isso rodam em paralelo desde o início. Toda trilha segue as skills do M-1 e atualiza a documentação no mesmo PR.
+
+Briefs propostos por trilha, com divisão Hydrogen/Argon/Claude: [briefs/onda-0.5.md](briefs/onda-0.5.md).
 
 ### Gate de saída da Onda 0.5
 Ver ADR 0006 (ciclos de background/resume e recriação de superfície sem vazamento, soak por aparelho com p95, TSan limpo, SIL do `Query` sem alocação, `Observation` em Android real, compilação incremental ≤ 5 s, tamanho do `.apk` medido). Números a calibrar com o S22 e o iPhone 16 Pro.
@@ -108,7 +113,7 @@ Qualquer trabalho de engine só depois do M-1. Render integrado, UI integrada, a
 | Marco | Critério |
 |---|---|
 | M-1 | `CLAUDE.md`, standards e skills do projeto aceitos; avaliação de terceiros registrada |
-| M0 | Pacote compila em macOS/Linux; iOS e Android compilam; CI verde e aplicando os padrões |
+| M0 | Pacote compila em macOS/Linux; iOS e Android compilam; CI verde e aplicando os padrões. **Estado:** Linux verificado localmente (build, testes, TSan, lint); macOS/iOS/Android dependem do CI |
 | M1 | Núcleos puros P-1..P-5 com testes e fuzz; benchmarks ECS/layout dentro da meta |
 | M2 | Cubo texturizado e botão com texto em iPhone 16 Pro (Metal) e, se o timebox permitir, no S22 (Vulkan) |
 | Gate | Critérios do ADR 0006 |
@@ -139,10 +144,10 @@ Qualquer trabalho de engine só depois do M-1. Render integrado, UI integrada, a
 | D2 | Núcleo retido de UI | **Decidido** (ADR 0002) |
 | D3 | Reatividade em lote por View | **Decidido** (ADR 0002) |
 | D4 | Scripts embarcados, no futuro | **Decidido** |
-| D5 | Prefixo `Caju*` | Proposto; fazer no M0 |
+| D5 | Prefixo `Caju*` | **Decidido** (ADR 0010) |
 | D6 | Slang | **Decidido** |
 | D7 | Galaxy S22 e iPhone 16 Pro | **Decidido**; aparelho de piso sugerido |
 | D8 | iOS 17 / Android API 29 | **Decidido** |
 | D9 | M-1 (qualidade e padrões) antes do M0 | **Decidido** (ADR 0009) |
 
-Em aberto: confirmar variante do S22 (Snapdragon ou Exynos), definir kill-criteria do TB-Android, confirmar o prefixo `Caju*`, escolher quais skills/specs de terceiros adotar no M-1.
+Em aberto: definir kill-criteria do TB-Android; validar os jobs experimentais de CI (Android, host Apple). Variante do S22 confirmada: S22+ Snapdragon.

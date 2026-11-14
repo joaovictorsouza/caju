@@ -1,0 +1,19 @@
+# Um diretório = um dono por vez (CLAUDE.md). Hoje há um só mantenedor; ao dividir trilhas,
+# troque o dono do diretório da trilha por quem a executa.
+*                          @joaovictorsouza
+/Package.swift             @joaovictorsouza
+/.github/                  @joaovictorsouza
+/docs/                     @joaovictorsouza
+/.claude/                  @joaovictorsouza
+/Sources/CajuMath/         @joaovictorsouza
+/Sources/CajuCore/         @joaovictorsouza
+/Sources/CajuScene/        @joaovictorsouza
+/Sources/CajuPlatform/     @joaovictorsouza
+/Sources/CajuRHI/          @joaovictorsouza
+/Sources/CajuRHIMetal/     @joaovictorsouza
+/Sources/CajuRHIVulkan/    @joaovictorsouza
+/Sources/CajuAssetsCore/   @joaovictorsouza
+/Sources/CajuPhysicsSpatial/ @joaovictorsouza
+/Sources/CajuUILayout/     @joaovictorsouza
+/Sources/CajuText/         @joaovictorsouza
+/Hosts/                    @joaovictorsouza

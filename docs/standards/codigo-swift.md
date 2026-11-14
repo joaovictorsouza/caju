@@ -1,7 +1,7 @@
 # Padrão de código Swift
 
-## Ferramentas (configurar no M0)
-- `swift-format` (formatação) e `SwiftLint` ou regras equivalentes (lint), rodando no CI; build com `-warnings-as-errors`.
+## Ferramentas (configuradas no M0; ADR 0010)
+- `swift format lint --strict` (config em `.swift-format`) e `scripts/check-forbidden.sh` (proíbe `try!`, `as!`, `fatalError(`, `precondition(` fora de testes) rodam no CI; avisos são erros (`.treatAllWarnings(as: .error)` no `Package.swift`). Formatar: `swift format format -i -r Sources Tests Package.swift`.
 - **Swift 6.2+**, `StrictConcurrency` ligado em todos os targets; nenhum aviso de concorrência aceito.
 - Documentação pública em **DocC** (`///`), com exemplo mínimo nos tipos principais.
 

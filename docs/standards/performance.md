@@ -13,4 +13,5 @@ Metas medidas nos aparelhos de referência (Galaxy S22, iPhone 16 Pro; ADR 0007)
 1. Nenhuma alocação por quadro no caminho quente (verificado por inspeção de SIL/instrumentação em testes dos módulos quentes).
 2. Todo módulo com meta tem *benchmark* no CI desde a primeira versão.
 3. Otimização só com *benchmark* antes e depois no PR.
-4. Tamanho de binário e tempo de compilação incremental medidos no CI; regressões aparecem no PR.
+4. Harness: `swift run -c release caju-bench` (JSON). O gate de 10 % só liga com linha de base de aparelho; números de runner de CI não são de referência.
+5. Tamanho de binário e tempo de compilação incremental medidos no CI; regressões aparecem no PR.

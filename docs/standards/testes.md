@@ -14,7 +14,7 @@
 
 ## Regras
 - **Teste junto com o código**; bug corrigido ganha teste de regressão.
-- **Determinismo:** `TimeUpdateStrategy.manual`, `Random` semeável (PCG); sem relógio de parede nem aleatoriedade não semeada em testes.
+- **Determinismo:** `TimeUpdateStrategy.manual`, `Random` semeável (`CajuPCG32` e `CajuFuzz.run` em `CajuTesting`); sem relógio de parede nem aleatoriedade não semeada em testes.
 - **Goldens:** atualização só por flag explícita e revisada no PR; um conjunto por backend.
 - **Benchmarks:** regressão > 10 % bloqueia merge; resultado guardado como JSON.
 - **Cobertura:** não há meta numérica global; o critério é *todo requisito `DEVE` do módulo tem teste* (rastreio por ID do catálogo).
