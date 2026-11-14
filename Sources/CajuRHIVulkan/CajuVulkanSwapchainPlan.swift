@@ -54,4 +54,21 @@ public enum CajuVulkanSwapchainPlan {
         }
         return formats.first
     }
+
+    /// Prefere `preferredFormat` (primeiro em espaço sRGB não linear, depois em qualquer espaço);
+    /// se indisponível na superfície, cai na ordem padrão de `chooseFormat(_:)`.
+    public static func chooseFormat(
+        _ formats: [SurfaceFormat], preferredFormat: UInt32
+    ) -> SurfaceFormat? {
+        let srgbNonlinear: UInt32 = 0
+        if let match = formats.first(where: {
+            $0.format == preferredFormat && $0.colorSpace == srgbNonlinear
+        }) {
+            return match
+        }
+        if let match = formats.first(where: { $0.format == preferredFormat }) {
+            return match
+        }
+        return chooseFormat(formats)
+    }
 }
