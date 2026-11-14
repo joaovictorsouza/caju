@@ -82,7 +82,7 @@ Escopo original:
 | Trilha | Módulo(s) | Entrega |
 |---|---|---|
 | **TB-1** | `CajuCore`, `CajuScene` | ECS mínimo híbrido, `Query` com PoC de packs + SIL, agendador single-thread com validação de acesso, mensagens, estados, tempo, `@Component` com `componentID` e reflexão estática, Transform/hierarquia |
-| **TB-2** | `CajuPlatform`, `CajuRHI`, backend Metal | Janela iOS/macOS, RHI com render pass + transient + frame graph, Slang → MSL, cubo e botão com texto em aparelho real. **Fase 1 (contrato do RHI/Platform + backend null) entregue: [ADR 0015](adr/0015-contrato-rhi-e-platform.md), [brief](briefs/tb-2.md)**; Metal, host e goldens nas Fases 2 e 3 |
+| **TB-2** | `CajuPlatform`, `CajuRHI`, backend Metal | Janela iOS/macOS, RHI com render pass + transient + frame graph, Slang → MSL, cubo e botão com texto em aparelho real. **Fases 1 a 3 entregues no simulador: contrato, backend null, backend Metal, host Apple, demo cubo + botão, goldens e 50 ciclos (ΔRSS 0,14 MB no Mac) ([ADR 0015](adr/0015-contrato-rhi-e-platform.md), [brief](briefs/tb-2.md)); falta iPhone 16 Pro, toque e aliasing por heap `(?)`** |
 | **TB-Android** | Platform Android, backend Vulkan | Gradle/CMake/JNI/`libswiftCore.so`, Game Thread, Vulkan próprio + VMA no S22; **timebox de 5 dias**, kill-criteria definidos antes de começar |
 | **P-1** | `CajuMath` completo | SIMD, interseções, cor, easing, testes de propriedade |
 | **P-2** | `CajuAssetsCore` | glTF (validação rigorosa), KTX2/Basis, meshopt, PNG/JPEG, *fuzz* |

@@ -346,6 +346,30 @@
             }
         }
 
+        /// Lê o mip 0 de uma textura `shared` (conformidade e *goldens*). Chame `queue.waitUntilIdle()` antes
+        /// para garantir que a GPU terminou de escrever. Retorna os bytes linha a linha, sem preenchimento.
+        public func readTexture(_ texture: CajuTextureHandle) throws(CajuRHIError) -> [UInt8] {
+            guard let record = textures.value(for: texture) else {
+                throw CajuHandlePool<CajuTextureTag, Int>.invalid(texture)
+            }
+            let d = record.descriptor
+            guard d.storage == .shared, !d.format.isCompressed, d.sampleCount == 1 else {
+                throw .invalidDescriptor(.incompatibleUsage)
+            }
+            let bytesPerRow = d.format.byteSize(width: d.width, height: 1)
+            var out = [UInt8](repeating: 0, count: bytesPerRow * d.height)
+            out.withUnsafeMutableBytes { raw in
+                if let base = raw.baseAddress {
+                    record.texture.getBytes(
+                        base, bytesPerRow: bytesPerRow,
+                        from: MTLRegion(
+                            origin: MTLOrigin(x: 0, y: 0, z: 0), size: MTLSize(d.width, d.height, 1)),
+                        mipmapLevel: 0)
+                }
+            }
+            return out
+        }
+
         // MARK: Transientes
 
         public func transientTexture(_ descriptor: CajuTextureDescriptor, slot: Int) throws(CajuRHIError)

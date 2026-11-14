@@ -30,5 +30,10 @@ A TB-Android precisa do contrato do `CajuRHI` para escrever o backend Vulkan enq
 - A API de passes de render tem arrays nos descritores: a gravação por quadro não aloca no estado estável (o executor reutiliza o descritor), mas montar descritores novos aloca; medir no *benchmark* (Fase 3) `(?)`.
 - Handles de textura do *swapchain* são válidos só até a apresentação.
 
+## Estado da implementação (Fase 2 e 3 da TB-2)
+- **Entregue:** `CajuRHIMetal` (render pass, `memoryless`, MSAA/resolve, frame graph, swapchain em `CAMetalLayer`), `CajuAppleHost` (UIKit/AppKit, display link, ciclo de vida), `Hosts/Apple` com shaders Slang → MSL e demo cubo + botão no simulador iPhone 17 Pro; suíte de conformidade (erros iguais no backend Metal e no null), golden MSAA, 50 ciclos de superfície com ΔRSS 0,14 MB e benchmark do frame graph (números em `docs/standards/performance.md`).
+- **Slang:** `slangc` 2026.8 perde os uniformes do estágio de vértice com vários pontos de entrada num módulo; compila-se um `.metal` por entrada (`Hosts/Apple/Shaders/compile-shaders.sh`). Convenção de vértices no Metal: fluxo `i` → slot `30 - i`.
+- **Pendente:** aliasing por heap no Metal (placement heap + fences; hoje só `memoryless` economiza memória de verdade) `(?)`; execução em iPhone 16 Pro e toque no botão; benchmark em `caju-bench` e linha de base de aparelho.
+
 ## Quando reabrir
 Se o Vulkan exigir semântica que o contrato não expressa (subpass explícito, *render pass* com dependências externas); quando o piso de SO permitir `Span`; se o custo de `~Copyable` associado atrapalhar o tempo de compilação (medir no CI).
