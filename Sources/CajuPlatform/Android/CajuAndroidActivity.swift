@@ -10,13 +10,13 @@
         ///
         /// - Parameters:
         ///   - activity: o `ANativeActivity*` recebido.
-        ///   - main: corpo da Game Thread; deve chamar ``CajuGameLoop/run(channel:delegate:)``.
+        ///   - main: corpo da Game Thread; deve chamar ``CajuAndroidGameLoop/run(channel:delegate:)``.
         public static func onCreate(
             activity rawActivity: UnsafeMutableRawPointer,
-            main: @escaping @Sendable (CajuPlatformChannel) -> Void
+            main: @escaping @Sendable (CajuAndroidChannel) -> Void
         ) {
             let activity = rawActivity.assumingMemoryBound(to: ANativeActivity.self)
-            guard let channel = try? CajuPlatformChannel() else {
+            guard let channel = try? CajuAndroidChannel() else {
                 cajuLog("falha ao criar o canal de eventos")
                 return
             }
@@ -75,9 +75,9 @@
     }
 
     private final class CajuAndroidActivityState: @unchecked Sendable {
-        let channel: CajuPlatformChannel
+        let channel: CajuAndroidChannel
         var thread: CajuGameThread?
-        init(channel: CajuPlatformChannel) { self.channel = channel }
+        init(channel: CajuAndroidChannel) { self.channel = channel }
     }
 
     private func stateOf(_ activity: UnsafeMutablePointer<ANativeActivity>?) -> CajuAndroidActivityState? {
@@ -85,7 +85,7 @@
         return Unmanaged<CajuAndroidActivityState>.fromOpaque(raw).takeUnretainedValue()
     }
 
-    private func push(_ activity: UnsafeMutablePointer<ANativeActivity>?, _ event: CajuPlatformEvent) {
+    private func push(_ activity: UnsafeMutablePointer<ANativeActivity>?, _ event: CajuAndroidEvent) {
         stateOf(activity)?.channel.events.push(event)
     }
 #endif

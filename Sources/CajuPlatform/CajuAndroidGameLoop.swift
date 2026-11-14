@@ -1,6 +1,6 @@
 /// Canal Activity → Game Thread: eventos mais os *handshakes* de destruição.
-public final class CajuPlatformChannel: Sendable {
-    public let events: CajuEventQueue<CajuPlatformEvent>
+public final class CajuAndroidChannel: Sendable {
+    public let events: CajuMailbox<CajuAndroidEvent>
     /// Sinalizado pelo laço depois de soltar a janela (`surfaceDestroyed`).
     public let surfaceReleased = CajuHandshake()
     /// Sinalizado pelo laço depois de desanexar a fila de entrada.
@@ -8,12 +8,12 @@ public final class CajuPlatformChannel: Sendable {
 
     /// - Throws: ``CajuPlatformError/invalidCapacity``.
     public init(eventCapacity: Int = 256) throws(CajuPlatformError) {
-        events = try CajuEventQueue(capacity: eventCapacity)
+        events = try CajuMailbox(capacity: eventCapacity)
     }
 }
 
 /// Implementado pelo jogo/renderizador; todas as chamadas acontecem na Game Thread.
-public protocol CajuGameDelegate {
+public protocol CajuAndroidGameDelegate {
     /// Há janela nova (primeira ou após recriação pelo sistema).
     mutating func surfaceCreated(_ window: CajuNativeWindow)
     /// O sistema mudou o tamanho/orientação da janela atual.
@@ -27,7 +27,7 @@ public protocol CajuGameDelegate {
     mutating func touch(_ event: CajuTouchEvent)
 }
 
-extension CajuGameDelegate {
+extension CajuAndroidGameDelegate {
     public mutating func surfaceResized() {}
     public mutating func activeChanged(_ active: Bool) {}
     public mutating func touch(_ event: CajuTouchEvent) {}
@@ -35,10 +35,10 @@ extension CajuGameDelegate {
 
 /// Laço da Game Thread: drena eventos, bloqueia quando inativo (sem gastar bateria)
 /// e desenha quando ativo.
-public enum CajuGameLoop {
-    /// Roda até receber ``CajuPlatformEvent/destroyed``.
-    public static func run<Delegate: CajuGameDelegate>(
-        channel: CajuPlatformChannel,
+public enum CajuAndroidGameLoop {
+    /// Roda até receber ``CajuAndroidEvent/destroyed``.
+    public static func run<Delegate: CajuAndroidGameDelegate>(
+        channel: CajuAndroidChannel,
         delegate: inout Delegate
     ) {
         var resumed = false
@@ -49,7 +49,7 @@ public enum CajuGameLoop {
         #endif
 
         while true {
-            let next: CajuPlatformEvent? = active ? channel.events.pop() : channel.events.wait()
+            let next: CajuAndroidEvent? = active ? channel.events.pop() : channel.events.wait()
             guard let event = next else {
                 #if os(Android)
                     input.drain { delegate.touch($0) }

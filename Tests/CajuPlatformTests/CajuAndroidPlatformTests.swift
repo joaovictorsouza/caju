@@ -2,16 +2,16 @@ import Testing
 
 @testable import CajuPlatform
 
-@Suite("CajuEventQueue")
+@Suite("CajuMailbox")
 struct CajuEventQueueTests {
     @Test func rejectsZeroCapacity() {
         #expect(throws: CajuPlatformError.invalidCapacity) {
-            _ = try CajuEventQueue<CajuPlatformEvent>(capacity: 0)
+            _ = try CajuMailbox<CajuAndroidEvent>(capacity: 0)
         }
     }
 
     @Test func fifoOrderAndWrapAround() throws {
-        let queue = try CajuEventQueue<Int32>(capacity: 3)
+        let queue = try CajuMailbox<Int32>(capacity: 3)
         for round in 0..<10 {
             let base = Int32(round * 3)
             #expect(queue.push(base) && queue.push(base + 1) && queue.push(base + 2))
@@ -24,7 +24,7 @@ struct CajuEventQueueTests {
     }
 
     @Test func waitBlocksUntilPushFromAnotherThread() throws {
-        let queue = try CajuEventQueue<CajuPlatformEvent>(capacity: 8)
+        let queue = try CajuMailbox<CajuAndroidEvent>(capacity: 8)
         let thread = CajuGameThread(name: "test-producer") { queue.push(.resumed) }
         try thread.start()
         #expect(queue.wait() == .resumed)
@@ -46,10 +46,10 @@ struct CajuHandshakeTests {
     }
 }
 
-private struct RecordingDelegate: CajuGameDelegate {
+private struct RecordingDelegate: CajuAndroidGameDelegate {
     var log: [String] = []
     var framesLeft = 3
-    let channel: CajuPlatformChannel
+    let channel: CajuAndroidChannel
 
     mutating func surfaceCreated(_ window: CajuNativeWindow) { log.append("created") }
     mutating func surfaceDestroyed() { log.append("destroyed") }
@@ -61,10 +61,10 @@ private struct RecordingDelegate: CajuGameDelegate {
     }
 }
 
-@Suite("CajuGameLoop")
-struct CajuGameLoopTests {
+@Suite("CajuAndroidGameLoop")
+struct CajuAndroidGameLoopTests {
     @Test func drawsOnlyWhileResumedWithSurfaceAndAcksDestruction() throws {
-        let channel = try CajuPlatformChannel()
+        let channel = try CajuAndroidChannel()
         var raw: UInt8 = 0
         try withUnsafeMutablePointer(to: &raw) { pointer in
             let window = CajuNativeWindow(raw: UnsafeMutableRawPointer(pointer))
@@ -78,7 +78,7 @@ struct CajuGameLoopTests {
                 channel.events.push(.destroyed)
             }
             try finisher.start()
-            CajuGameLoop.run(channel: channel, delegate: &delegate)
+            CajuAndroidGameLoop.run(channel: channel, delegate: &delegate)
             finisher.join()
             #expect(delegate.log.first == "created")
             #expect(delegate.log.contains("active"))

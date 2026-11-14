@@ -3,7 +3,7 @@
     import CajuRHIVulkan
 
     /// Jogo mínimo do TB-Android: um triângulo girando, na Game Thread.
-    struct CajuTriangleGame: CajuGameDelegate {
+    struct CajuTriangleGame: CajuAndroidGameDelegate {
         private var renderer: CajuVulkanTriangleRenderer?
         private var failed = false
 
@@ -60,7 +60,7 @@
     ) {
         CajuAndroidActivity.onCreate(activity: activity) { channel in
             var game = CajuTriangleGame()
-            CajuGameLoop.run(channel: channel, delegate: &game)
+            CajuAndroidGameLoop.run(channel: channel, delegate: &game)
         }
     }
 #endif

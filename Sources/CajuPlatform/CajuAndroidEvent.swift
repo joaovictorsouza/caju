@@ -17,7 +17,7 @@ public struct CajuNativeInputQueue: BitwiseCopyable, @unchecked Sendable, Equata
 
 /// Eventos de ciclo de vida, superfície e entrada que a Activity (UI thread)
 /// envia à Game Thread (ADR 0008). Só tipos triviais: copiar não aloca.
-public enum CajuPlatformEvent: BitwiseCopyable, Sendable, Equatable {
+public enum CajuAndroidEvent: BitwiseCopyable, Sendable, Equatable {
     case started
     case resumed
     case paused

@@ -33,7 +33,7 @@ rm -f "${out:?}"/*.so
   -lswiftAndroid -lvulkan -landroid -llog -lc++_shared -ldl -lm
 
 # Runtime do Swift empacotado junto: resolve as dependências (DT_NEEDED) transitivas
-# da lib do host dentro do Swift SDK (Swift 6.4.2; ver docs/adr/0012).
+# da lib do host dentro do Swift SDK (Swift 6.4.2; ver docs/adr/0019).
 readelf="$llvm/bin/llvm-readelf"
 pending="libCajuAndroidHost.so"
 while [ -n "$pending" ]; do

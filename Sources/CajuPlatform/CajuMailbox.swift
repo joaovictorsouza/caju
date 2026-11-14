@@ -10,7 +10,7 @@
 ///
 /// Sem alocação após o `init`. Se encher, `push` devolve `false` (o chamador
 /// decide; eventos de ciclo de vida nunca devem chegar a isso: capacidade folgada).
-public final class CajuEventQueue<Event: BitwiseCopyable & Sendable>: @unchecked Sendable {
+public final class CajuMailbox<Event: BitwiseCopyable & Sendable>: @unchecked Sendable {
     private let storage: UnsafeMutablePointer<Event>
     private let capacity: Int
     private var head = 0
