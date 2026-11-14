@@ -1,0 +1,7 @@
+module CVulkan [system] {
+    header "shim.h"
+    link "vulkan"
+    link "android"
+    link "log"
+    export *
+}
