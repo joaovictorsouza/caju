@@ -9,6 +9,8 @@
 - **Agendador single-thread correto primeiro**, já validando o **grafo de acesso Read/Write no registro** dos sistemas. O pool work-stealing próprio só entra quando benchmark provar ganho líquido. Swift Concurrency fica nas bordas (I/O, rede, assets).
 - Regra e teste de CI: **sem estado global mutável escondido** em sistemas, para que paralelizar depois seja troca de executor e não de API.
 
+**Atualização (TB-1):** o PoC de packs reprovou no SIL (*witness* por linha); vale o fallback de aridade 1..8. Ver [ADR 0014](0014-ecs-query-e-component.md).
+
 ## Motivos
 Otimização prematura de um pool é risco no caminho crítico; a meta de 100 mil entidades em < 2 ms deve ser viável em uma thread (a medir); big.LITTLE e ARC compartilhado podem anular o ganho.
 
