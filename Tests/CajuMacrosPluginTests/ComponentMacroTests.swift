@@ -7,21 +7,29 @@ import XCTest
 // XCTest aqui: `assertMacroExpansion` reporta falhas via XCTest (docs/standards/testes.md permite XCTest "onde necessário").
 final class ComponentMacroTests: XCTestCase {
     private let macros: [String: Macro.Type] = ["Component": ComponentMacro.self]
+    // `conformances` imita o que o compilador passa em `conformingTo` (tipo ainda sem `CajuComponent`).
+    private let specs: [String: MacroSpec] = [
+        "Component": MacroSpec(type: ComponentMacro.self, conformances: ["CajuComponent"])
+    ]
 
     func testStructInternal() {
         assertMacroExpansion(
             """
             @Component(id: 20)
-            struct Pos { var x: Float }
+            struct Pos {
+                var x: Float
+            }
             """,
             expandedSource: """
-                struct Pos { var x: Float }
+                struct Pos {
+                    var x: Float
+                }
 
                 extension Pos: CajuComponent {
                     static let componentID = CajuComponentID(20)
                 }
                 """,
-            macros: macros
+            macroSpecs: specs
         )
     }
 
@@ -29,16 +37,20 @@ final class ComponentMacroTests: XCTestCase {
         assertMacroExpansion(
             """
             @Component(id: 1_5)
-            public enum Kind: UInt8 { case a }
+            public enum Kind: UInt8 {
+                case a
+            }
             """,
             expandedSource: """
-                public enum Kind: UInt8 { case a }
+                public enum Kind: UInt8 {
+                    case a
+                }
 
                 extension Kind: CajuComponent {
                     public static let componentID = CajuComponentID(15)
                 }
                 """,
-            macros: macros
+            macroSpecs: specs
         )
     }
 
