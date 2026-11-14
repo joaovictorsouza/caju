@@ -1,11 +1,25 @@
 # CajuMath
 
-Tipos matemáticos primitivos: `CajuVec2/3/4`, `CajuQuat`, `CajuMat4` (SIMD, `Float`, coluna-maior).
+Matemática 3D de `Float` (SIMD, mão direita, coluna-maior `M * v`). Sem Foundation (libc via `CajuLibm.swift`), sem alocação, sem `!`/`try!`/`fatalError`: operações que podem falhar devolvem `nil`.
 
-- **Camada:** 0 (puro, sem dependências, sem Foundation; `sinf`/`cosf` da libc).
-- **Trilha dona:** P-1 (Math completo: interseções, cor, easing, `CajuMat4` inverso etc.).
-- **Estado:** tipos primitivos do M0. Divergências numéricas toleradas nos testes: 1e-5 (relativo).
+- **Camada:** 0 (puro, sem dependências).
+- **Trilha dona:** P-1.
+- **Estado:** P-1 entregue (ver abaixo). Tolerância numérica nos testes: 1e-5 (relativa).
+
+## API pública
+| Arquivo | Conteúdo |
+|---|---|
+| `CajuScalar.swift` | `lerp`, `clamp`, `saturate`, `smoothstep`, `inverseLerp`, `remap`, graus↔radianos, `approximatelyEqual` |
+| `CajuVec.swift` | `CajuVec2/3/4`: operadores, `dot`/`cross`, `length`, `normalized()`, `distance`, `lerp`, `clamp`, min/max/abs/floor/ceil, `reflect`, `project`, `angle(to:)`, base ortonormal |
+| `CajuMat4.swift` | `CajuMat4`: TRS, `inverse`, `inverseAffine`, `determinant`, `decompose()`, `lookAt`, `perspective`/`orthographic` (profundidade 0…1), `transformPoint/Direction` |
+| `CajuQuat.swift` | `CajuQuat`: eixo-ângulo (de/para), de/para matriz, yaw-pitch-roll, `slerp`/`nlerp`, `init?(from:to:)`, `lookRotation`, `inverse` |
+| `CajuIntersect.swift` | `CajuRay`, `CajuAABB`, `CajuSphere`, `CajuPlane`, `CajuFrustum`: raio×AABB/esfera/plano/triângulo (Möller–Trumbore), AABB/esfera/plano entre si |
+| `CajuColor.swift` | `CajuColor` (linear): sRGB↔linear, hex, HSV, `lerp`, `premultiplied`, `luminance` |
+| `CajuEasing.swift` | `CajuEasing` (31 curvas) e `cubicBezier` |
 
 ## Como testar
 `swift test --filter CajuMathTests` (propriedade com PCG semeado, 10 000 casos por teste) e
 `swift run -c release caju-bench` para o harness de benchmark.
+
+## Pendências
+- Benchmarks de `inverse`, `slerp`, ray×AABB/triângulo ainda não estão em `caju-bench` (`Sources/CajuBenchmarks` é do harness; pedir inclusão).
