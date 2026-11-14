@@ -62,11 +62,13 @@ let package = Package(
         module("CajuUILayout", ["CajuMath", "CajuCollections"]),
         module("CajuPhysicsSpatial", ["CajuMath", "CajuCollections"]),
         // Camada 2 (plataforma e GPU)
-        module("CajuPlatform", ["CajuCore", .target(name: "CVulkan", condition: .when(platforms: [.android]))]),
+        module(
+            "CajuPlatform", ["CajuCore", .target(name: "CVulkan", condition: .when(platforms: [.android]))]),
         module("CajuRHI", ["CajuCore", "CajuMath"]),
         module("CajuRHIMetal", ["CajuRHI"]),
         // Vulkan só existe no Android: o CVulkan (system library) é condicional.
-        module("CajuRHIVulkan", ["CajuRHI", .target(name: "CVulkan", condition: .when(platforms: [.android]))]),
+        module(
+            "CajuRHIVulkan", ["CajuRHI", .target(name: "CVulkan", condition: .when(platforms: [.android]))]),
         // Camada 3
         module("CajuScene", ["CajuCore", "CajuMath"]),
         module("CajuInput", ["CajuCore", "CajuMath", "CajuPlatform"]),
