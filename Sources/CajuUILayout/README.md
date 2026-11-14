@@ -20,7 +20,7 @@ Duas passadas lineares: faixas `(min, ideal, max)` de baixo para cima e molduras
 - `CajuCollections` (declarada; ainda não usada)
 
 ## Como testar
-Testes em `Tests/CajuUILayoutTests` (exemplos, propriedades com PCG semeado, estabilidade de armazenamento). Eles só rodam depois do PR de `Package.swift` que declara o alvo `CajuUILayoutTests` e a dependência de `CajuBenchmarks` (ver PR da trilha). O alvo `CajuModulesTests` garante que o módulo compila e linka.
+`swift test --filter CajuUILayoutTests` (exemplos, propriedades com PCG semeado, estabilidade de armazenamento) e `swift run -c release caju-bench` (entrada `uilayout.relayout_1000_nodes`). O alvo `CajuModulesTests` garante que o módulo compila e linka.
 
 ## Medidas (Linux x86-64, release; `(?)` em aparelho)
 ~1 000 nós, relayout completo ≈ 45 µs; 0 `malloc` em 10 000 relayouts + hit-tests (contador via `LD_PRELOAD`); hit-test ≈ 0,1–0,3 µs.

@@ -1,6 +1,7 @@
 // Harness de benchmark do Caju (M0). Saída em JSON no stdout para versionar e comparar no CI.
 // Uso: swift run -c release caju-bench
 import CajuMath
+import CajuUILayout
 
 #if canImport(Glibc)
     import Glibc
@@ -41,6 +42,22 @@ let q = CajuQuat(axis: CajuVec3(1, 2, 3), radians: 0.7) ?? .identity
 let m = CajuMat4.rotation(q) * CajuMat4.translation(CajuVec3(1, 2, 3))
 let n = 1_000_000
 
+/// Árvore de UI de ~1 000 nós (50 linhas × 19 folhas + `Spacer`) para o NFR-009.
+func makeLayoutTree() -> CajuLayoutTree {
+    var tree = CajuLayoutTree(capacity: 1_100)
+    guard let root = try? tree.add(.vStack(spacing: 2)) else { return tree }
+    for _ in 0..<50 {
+        guard let row = try? tree.add(.hStack(spacing: 2), to: root) else { continue }
+        for column in 0..<19 {
+            if column == 9 { _ = try? tree.add(.spacer(), to: row) }
+            _ = try? tree.add(.leaf(.fixed(CajuVec2(20, 20))), to: row)
+        }
+    }
+    return tree
+}
+var layoutTree = makeLayoutTree()
+layoutTree.layout(in: CajuVec2(1000, 2000))
+
 let results = [
     measure("vec3.cross", iterations: n) { i in
         let a = CajuVec3(Float(i & 7), 1, 2)
@@ -51,6 +68,12 @@ let results = [
     },
     measure("mat4.mul", iterations: n) { i in
         (m * CajuMat4.translation(CajuVec3(Float(i & 7), 0, 0))).c3.x
+    },
+    // Relayout completo (árvore invalidada a cada iteração) de ~1 000 nós.
+    measure("uilayout.relayout_1000_nodes", iterations: 2_000) { i in
+        layoutTree.invalidate()
+        layoutTree.layout(in: CajuVec2(1000, 2000))
+        return Float(i & 1)
     },
 ]
 
