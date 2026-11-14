@@ -22,3 +22,5 @@ Uma página curta por decisão. Formato: **Status**, **Contexto**, **Decisão**,
 | [0017](0017-parsers-de-assets-puros.md) | Parsers de assets em Swift puro; Basis/JPEG pixels fora | Aceito |
 | [0018](0018-bvh-e-primitivas-espaciais.md) | P-3: BVH dinâmica, primitivas espaciais e consultas sem alocação | Aceito |
 | [0019](0019-host-android-build-e-link.md) | Host Android: NativeActivity em Swift, `CVulkan` e link com o NDK | Aceito |
+
+**Números reservados:** 0016 (P-1, nunca escrito, não reutilizar); 0020 a 0029 para a Onda 1 (ver [briefs/onda-1.md](../briefs/onda-1.md)); usar só se houver decisão.

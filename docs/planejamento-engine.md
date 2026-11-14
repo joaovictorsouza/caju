@@ -99,6 +99,7 @@ Ver ADR 0006 (ciclos de background/resume e recriação de superfície sem vazam
 
 ### Onda 1: integração por módulo (depende de TB-1, TB-2 e do gate)
 Assets+ECS (`AssetServer`, handles, hot reload), Render completo, Input e gestos, UI integrada (DSL, widgets, batcher), Anim, Physics (ECS), Audio (`miniaudio`), Tools (texture, validate-gltf, manifest). Dentro da onda, módulos diferentes continuam paralelos (um diretório por dono).
+Brief proposto (trilhas S-0, A-1, A-2, R-1, V-1, I-1, U-1, AN-1, PH-1, AU-1, T-1, dependências, ADRs 0020 a 0029 reservados e gate): [briefs/onda-1.md](briefs/onda-1.md).
 
 ### Depois
 **Vertical slice medido** (personagem animado com skinning, UI de loja, câmera, toque; NFR-001/002/003/008/009 nos aparelhos de referência) → v1.0 (texto completo, acessibilidade, i18n, LOD, quirks, conteúdo remoto, Toon) → opcionais (camera rig, Luau, física dinâmica, backend WebGPU).
