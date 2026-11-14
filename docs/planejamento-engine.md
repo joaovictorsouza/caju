@@ -83,7 +83,7 @@ Escopo original:
 |---|---|---|
 | **TB-1** | `CajuCore`, `CajuScene` | ECS mínimo híbrido, `Query` com PoC de packs + SIL, agendador single-thread com validação de acesso, mensagens, estados, tempo, `@Component` com `componentID` e reflexão estática, Transform/hierarquia |
 | **TB-2** | `CajuPlatform`, `CajuRHI`, backend Metal | Janela iOS/macOS, RHI com render pass + transient + frame graph, Slang → MSL, cubo e botão com texto em aparelho real |
-| **TB-Android** | Platform Android, backend Vulkan | Gradle/CMake/JNI/`libswiftCore.so`, Game Thread, Vulkan próprio + VMA no S22; **timebox de 5 dias**, kill-criteria definidos antes de começar |
+| **TB-Android** | Platform Android, backend Vulkan | NativeActivity em Swift, Game Thread, Vulkan próprio no S22+; **limite de 3 dias** ([ADR 0011](adr/0011-kill-criteria-tb-android.md)). **Estado (2026-11-13):** triângulo Vulkan em Swift rodando no S22+ com Game Thread própria ([ADR 0019](adr/0019-host-android-build-e-link.md), `Hosts/Android`); falta o backend `CajuRHI`, VMA, rotação e CI do APK |
 | **P-1** | `CajuMath` completo | SIMD, interseções, cor, easing, testes de propriedade |
 | **P-2** | `CajuAssetsCore` | glTF (validação rigorosa), KTX2/Basis, meshopt, PNG/JPEG, *fuzz* |
 | **P-3** | `CajuPhysicsSpatial` | BVH dinâmica, raycast/shapecast/sobreposição |

@@ -15,3 +15,4 @@ Uma página curta por decisão. Formato: **Status**, **Contexto**, **Decisão**,
 | [0009](0009-qualidade-e-padroes.md) | M-1: qualidade e padrões antes de começar | Aceito |
 | [0010](0010-fundacao-m0.md) | Fundação do M0: pacote, CI, host, prefixo `Caju*` | Aceito |
 | [0013](0013-layout-de-ui-por-faixas.md) | Layout de UI por faixas de tamanho (P-4) | Aceito |
+| [0019](0019-host-android-build-e-link.md) | Host Android: NativeActivity em Swift, `CVulkan` e link com o NDK | Aceito |
