@@ -43,6 +43,9 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable # Swift 6.2 exige Xcode 26+
       - run: swift --version
       - name: Build e testes
         run: swift build && swift test
@@ -55,7 +58,7 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-      - uses: swiftlang/swift-android-action@v2
+      - uses: skiptools/swift-android-action@v2
         with:
           swift-version: "6.2"
           android-api-level: 29
@@ -68,6 +71,9 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable # Swift 6.2 exige Xcode 26+
       - run: brew install xcodegen
       - run: cd Hosts/Apple && xcodegen generate
       - run: cd Hosts/Apple && xcodebuild -project CajuHost.xcodeproj -scheme CajuHost-macOS build CODE_SIGNING_ALLOWED=NO
