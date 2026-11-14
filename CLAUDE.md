@@ -6,6 +6,8 @@ Engine 3D multiplataforma inteiramente em Swift. Leia antes de qualquer trabalho
 2. `docs/adr/README.md` (decisões e motivos)
 3. `docs/standards/` (código, testes, performance, PR, definition of done)
 
+`AGENTS.md` espelha este arquivo; **a fonte é o `CLAUDE.md`**.
+
 ## Regras fixas
 - **Documentação viva:** toda mudança que altere comportamento, API pública, arquitetura, decisão, métrica ou processo **atualiza a documentação no mesmo PR** (skill `caju-docs-sync`). PR sem a atualização necessária não está pronto.
 - **Decisão nova ou revisão de decisão = ADR** em `docs/adr/` (numerado, nunca apagado; se mudar, crie ADR que substitui e marque o antigo como "Substituído por").
@@ -20,3 +22,5 @@ Engine 3D multiplataforma inteiramente em Swift. Leia antes de qualquer trabalho
 - `caju-swift-quality`: padrão de código, concorrência, desempenho e revisão.
 - `caju-testing`: estratégia de testes, *goldens*, *fuzz*, *benchmarks*.
 - `caju-new-module`: criar/alterar módulo seguindo contrato e donos.
+- `caju-adr`: escrever, substituir e indexar ADRs.
+- `caju-track-brief`: brief de trilha antes de começar a codar.
