@@ -83,7 +83,7 @@ let package = Package(
         // Ferramentas
         .executableTarget(
             name: "CajuBenchmarks",
-            dependencies: ["CajuMath", "CajuCore"],
+            dependencies: ["CajuMath", "CajuCore", "CajuUILayout"],
             swiftSettings: common
         ),
 
@@ -101,6 +101,11 @@ let package = Package(
         .testTarget(
             name: "CajuSceneTests",
             dependencies: ["CajuScene", "CajuCore", "CajuMath", "CajuTesting"],
+            swiftSettings: common
+        ),
+        .testTarget(
+            name: "CajuUILayoutTests",
+            dependencies: ["CajuUILayout", "CajuMath", "CajuTesting"],
             swiftSettings: common
         ),
         .testTarget(
