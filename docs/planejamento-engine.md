@@ -82,8 +82,8 @@ Escopo original:
 | Trilha | Módulo(s) | Entrega |
 |---|---|---|
 | **TB-1** | `CajuCore`, `CajuScene` | ECS mínimo híbrido, `Query` com PoC de packs + SIL, agendador single-thread com validação de acesso, mensagens, estados, tempo, `@Component` com `componentID` e reflexão estática, Transform/hierarquia |
-| **TB-2** | `CajuPlatform`, `CajuRHI`, backend Metal | Janela iOS/macOS, RHI com render pass + transient + frame graph, Slang → MSL, cubo e botão com texto em aparelho real |
-| **TB-Android** | Platform Android, backend Vulkan | Gradle/CMake/JNI/`libswiftCore.so`, Game Thread, Vulkan próprio + VMA no S22; **timebox de 5 dias**, kill-criteria definidos antes de começar |
+| **TB-2** | `CajuPlatform`, `CajuRHI`, backend Metal | Janela iOS/macOS, RHI com render pass + transient + frame graph, Slang → MSL, cubo e botão com texto em aparelho real. **Fase 1 (contrato do RHI/Platform + backend null) entregue: [ADR 0015](adr/0015-contrato-rhi-e-platform.md), [brief](briefs/tb-2.md)**; Metal, host e goldens nas Fases 2 e 3 |
+| **TB-Android** | Platform Android, backend Vulkan | NativeActivity em Swift, Game Thread, Vulkan próprio no S22+; **limite de 3 dias** ([ADR 0011](adr/0011-kill-criteria-tb-android.md)). **Estado (2026-11-13):** triângulo Vulkan em Swift rodando no S22+ com Game Thread própria ([ADR 0019](adr/0019-host-android-build-e-link.md), `Hosts/Android`); falta o backend `CajuRHI`, VMA, rotação e CI do APK |
 | **P-1** | `CajuMath` completo | SIMD, interseções, cor, easing, testes de propriedade (**código e testes entregues**; falta benchmark no harness) |
 | **P-2** | `CajuAssetsCore` | glTF (validação rigorosa), KTX2/Basis, meshopt, PNG/JPEG, *fuzz* |
 | **P-3** | `CajuPhysicsSpatial` | BVH dinâmica e de triângulos, raycast/shapecast/sobreposição (**implementado**; testes em `CajuModulesTests`, benchmark pendente `(?)`, [ADR 0018](adr/0018-bvh-e-primitivas-espaciais.md)) |
@@ -150,4 +150,4 @@ Qualquer trabalho de engine só depois do M-1. Render integrado, UI integrada, a
 | D8 | iOS 17 / Android API 29 | **Decidido** |
 | D9 | M-1 (qualidade e padrões) antes do M0 | **Decidido** (ADR 0009) |
 
-Em aberto: definir kill-criteria do TB-Android; validar os jobs experimentais de CI (Android, host Apple). Variante do S22 confirmada: S22+ Snapdragon.
+Em aberto: alinhar o backend Vulkan ao contrato do RHI (ADR 0015); validar os jobs experimentais de CI (Android, host Apple). Variante do S22 confirmada: S22+ Snapdragon.
