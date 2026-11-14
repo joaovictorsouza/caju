@@ -4,7 +4,7 @@
 /// let m = CajuMat4(translation: CajuVec3(1, 2, 3), rotation: .identity, scale: .one)
 /// let p = m.transformPoint(.zero)  // (1, 2, 3)
 /// ```
-public struct CajuMat4: Sendable, Equatable {
+public struct CajuMat4: Sendable, BitwiseCopyable, Equatable {
     public var c0: SIMD4<Float>
     public var c1: SIMD4<Float>
     public var c2: SIMD4<Float>

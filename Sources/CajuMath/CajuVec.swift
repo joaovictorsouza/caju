@@ -4,7 +4,7 @@
 /// let v = CajuVec2(3, 4)
 /// let n = v.normalized()  // CajuVec2(0.6, 0.8)
 /// ```
-public struct CajuVec2: Sendable, Equatable, Hashable {
+public struct CajuVec2: Sendable, BitwiseCopyable, Equatable, Hashable {
     public var x: Float
     public var y: Float
 
@@ -125,7 +125,7 @@ public struct CajuVec2: Sendable, Equatable, Hashable {
 /// ```swift
 /// let c = CajuVec3(1, 0, 0).cross(CajuVec3(0, 1, 0))  // (0, 0, 1)
 /// ```
-public struct CajuVec3: Sendable, Equatable, Hashable {
+public struct CajuVec3: Sendable, BitwiseCopyable, Equatable, Hashable {
     public var storage: SIMD3<Float>
 
     @inlinable public init(_ x: Float, _ y: Float, _ z: Float) { storage = SIMD3(x, y, z) }
@@ -272,7 +272,7 @@ public struct CajuVec3: Sendable, Equatable, Hashable {
 }
 
 /// Vetor de 4 componentes (`Float`), armazenado como `SIMD4<Float>`.
-public struct CajuVec4: Sendable, Equatable, Hashable {
+public struct CajuVec4: Sendable, BitwiseCopyable, Equatable, Hashable {
     public var storage: SIMD4<Float>
 
     @inlinable public init(_ x: Float, _ y: Float, _ z: Float, _ w: Float) {

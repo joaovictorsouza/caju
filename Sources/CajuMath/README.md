@@ -2,6 +2,7 @@
 
 Matemática 3D de `Float` (SIMD, mão direita, coluna-maior `M * v`). Sem Foundation (libc via `CajuLibm.swift`), sem alocação, sem `!`/`try!`/`fatalError`: operações que podem falhar devolvem `nil`.
 
+- **Layout:** todos os tipos POD (`CajuVec2/3/4`, `CajuQuat`, `CajuMat4`, `CajuColor`, volumes e `CajuRay`) são `BitwiseCopyable`, para uso em armazenamento do ECS (pedido da TB-1).
 - **Camada:** 0 (puro, sem dependências).
 - **Trilha dona:** P-1.
 - **Estado:** P-1 entregue (ver abaixo). Tolerância numérica nos testes: 1e-5 (relativa).

@@ -4,7 +4,7 @@
 /// let linear = CajuColor(srgb: 0.5, g: 0.5, b: 0.5)
 /// let hex = CajuColor(hex: 0x3A7BD5)
 /// ```
-public struct CajuColor: Sendable, Equatable, Hashable {
+public struct CajuColor: Sendable, BitwiseCopyable, Equatable, Hashable {
     /// Componente vermelho no espaço linear.
     public var r: Float
     /// Componente verde no espaço linear.

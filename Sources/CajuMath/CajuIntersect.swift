@@ -4,7 +4,7 @@
 /// let ray = CajuRay(origin: CajuVec3(0, 0, 5), direction: CajuVec3(0, 0, -1))
 /// let hitT = ray.intersects(CajuSphere(center: .zero, radius: 1))  // 4
 /// ```
-public struct CajuRay: Sendable, Equatable, Hashable {
+public struct CajuRay: Sendable, BitwiseCopyable, Equatable, Hashable {
     public var origin: CajuVec3
     public var direction: CajuVec3
 
@@ -152,7 +152,7 @@ public struct CajuRay: Sendable, Equatable, Hashable {
 }
 
 /// Resultado de interseção raio × triângulo com parâmetro `t` e coordenadas baricêntricas `(u, v)`.
-public struct CajuRayTriangleHit: Sendable, Equatable, Hashable {
+public struct CajuRayTriangleHit: Sendable, BitwiseCopyable, Equatable, Hashable {
     public var t: Float
     public var u: Float
     public var v: Float
@@ -165,7 +165,7 @@ public struct CajuRayTriangleHit: Sendable, Equatable, Hashable {
 }
 
 /// Caixa delimitadora alinhada aos eixos (*Axis-Aligned Bounding Box*).
-public struct CajuAABB: Sendable, Equatable, Hashable {
+public struct CajuAABB: Sendable, BitwiseCopyable, Equatable, Hashable {
     public var min: CajuVec3
     public var max: CajuVec3
 
@@ -256,7 +256,7 @@ public struct CajuAABB: Sendable, Equatable, Hashable {
 }
 
 /// Esfera delimitadora definida por centro e raio.
-public struct CajuSphere: Sendable, Equatable, Hashable {
+public struct CajuSphere: Sendable, BitwiseCopyable, Equatable, Hashable {
     public var center: CajuVec3
     public var radius: Float
 
@@ -292,7 +292,7 @@ public struct CajuSphere: Sendable, Equatable, Hashable {
 }
 
 /// Classificação espacial de um volume em relação a um plano.
-public enum CajuPlaneSide: Sendable, Equatable, Hashable {
+public enum CajuPlaneSide: Sendable, BitwiseCopyable, Equatable, Hashable {
     /// Totalmente no semi-espaço positivo da normal (`signedDistance > 0`).
     case front
     /// Totalmente no semi-espaço negativo da normal (`signedDistance < 0`).
@@ -302,7 +302,7 @@ public enum CajuPlaneSide: Sendable, Equatable, Hashable {
 }
 
 /// Plano em 3D definido por `normal.dot(p) + distance == 0` (com `normal` unitário).
-public struct CajuPlane: Sendable, Equatable, Hashable {
+public struct CajuPlane: Sendable, BitwiseCopyable, Equatable, Hashable {
     public var normal: CajuVec3
     public var distance: Float
 
@@ -368,7 +368,7 @@ public struct CajuPlane: Sendable, Equatable, Hashable {
 }
 
 /// Tronco de visão (*frustum*) com 6 planos apontando para dentro, extraído de matriz view-projeção `[0, 1]`.
-public struct CajuFrustum: Sendable, Equatable {
+public struct CajuFrustum: Sendable, BitwiseCopyable, Equatable {
     public var left: CajuPlane
     public var right: CajuPlane
     public var bottom: CajuPlane

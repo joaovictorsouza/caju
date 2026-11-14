@@ -4,7 +4,7 @@
 /// let q = CajuQuat(axis: .unitZ, radians: .pi / 2) ?? .identity
 /// let v = q.rotate(.unitX)  // ~(0, 1, 0)
 /// ```
-public struct CajuQuat: Sendable, Equatable, Hashable {
+public struct CajuQuat: Sendable, BitwiseCopyable, Equatable, Hashable {
     public var storage: SIMD4<Float>
 
     @inlinable public init(x: Float, y: Float, z: Float, w: Float) { storage = SIMD4(x, y, z, w) }
