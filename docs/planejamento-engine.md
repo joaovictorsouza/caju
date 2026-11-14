@@ -85,7 +85,7 @@ Escopo original:
 | **TB-2** | `CajuPlatform`, `CajuRHI`, backend Metal | Janela iOS/macOS, RHI com render pass + transient + frame graph, Slang → MSL, cubo e botão com texto em aparelho real |
 | **TB-Android** | Platform Android, backend Vulkan | Gradle/CMake/JNI/`libswiftCore.so`, Game Thread, Vulkan próprio + VMA no S22; **timebox de 5 dias**, kill-criteria definidos antes de começar |
 | **P-1** | `CajuMath` completo | SIMD, interseções, cor, easing, testes de propriedade |
-| **P-2** | `CajuAssetsCore` | glTF (validação rigorosa), KTX2/Basis, meshopt, PNG/JPEG, *fuzz* |
+| **P-2** | `CajuAssetsCore` | glTF (validação rigorosa), KTX2/Basis, meshopt, PNG/JPEG, *fuzz*. Feito em Swift puro, exceto transcodificação Basis/Zstd e pixels JPEG (pendentes; ADR 0017) |
 | **P-3** | `CajuPhysicsSpatial` | BVH dinâmica, raycast/shapecast/sobreposição |
 | **P-4** | `CajuUILayout` | Árvore retida, protocolo de layout SwiftUI-like, stacks/ZStack/frame/Spacer, hit-testing |
 | **P-5** | `CajuText` | Shaping, medida, quebra de linha, atlas MSDF em bitmap de CPU, modelo do `TextEditor` |

@@ -88,5 +88,7 @@ func checkedAdd(_ a: Int, _ b: Int, _ context: String) throws(AssetError) -> Int
 /// Falha com `limitExceeded` se `requested > limit` (chamar ANTES de alocar).
 @inline(__always)
 func checkLimit(_ requested: Int, _ limit: Int, _ context: String) throws(AssetError) {
-    guard requested <= limit else { throw .limitExceeded(context: context, limit: limit, requested: requested) }
+    guard requested <= limit else {
+        throw .limitExceeded(context: context, limit: limit, requested: requested)
+    }
 }
