@@ -3,7 +3,7 @@
 Texto: leitura de fonte, shaping, medida, quebra de linha, atlas MSDF e modelo de edição.
 
 - **Camada:** 1 (puro; dependências só para baixo, ver §5 do plano).
-- **Trilha dona:** P-5. Decisões: [ADR 0011](../../docs/adr/0011-texto-p5.md).
+- **Trilha dona:** P-5. Decisões: [ADR 0012](../../docs/adr/0012-texto-p5.md).
 - **Estado:** implementado para texto latino do MVP; sem dependências C.
 
 ## API pública

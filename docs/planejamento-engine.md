@@ -88,7 +88,7 @@ Escopo original:
 | **P-2** | `CajuAssetsCore` | glTF (validação rigorosa), KTX2/Basis, meshopt, PNG/JPEG, *fuzz* |
 | **P-3** | `CajuPhysicsSpatial` | BVH dinâmica, raycast/shapecast/sobreposição |
 | **P-4** | `CajuUILayout` | Árvore retida, protocolo de layout SwiftUI-like, stacks/ZStack/frame/Spacer, hit-testing |
-| **P-5** | `CajuText` | Shaping, medida, quebra de linha, atlas MSDF em bitmap de CPU, modelo do `TextEditor` (sem dependências C; HarfBuzz/FreeType por PR dedicado, ver [ADR 0011](adr/0011-texto-p5.md)) |
+| **P-5** | `CajuText` | Shaping, medida, quebra de linha, atlas MSDF em bitmap de CPU, modelo do `TextEditor` (sem dependências C; HarfBuzz/FreeType por PR dedicado, ver [ADR 0012](adr/0012-texto-p5.md)) |
 
 P-1 a P-5 não dependem de GPU nem de ECS e têm contrato estável (dados de entrada → dados de saída), por isso rodam em paralelo desde o início. Toda trilha segue as skills do M-1 e atualiza a documentação no mesmo PR.
 
