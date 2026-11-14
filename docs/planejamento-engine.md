@@ -83,7 +83,7 @@ Escopo original:
 |---|---|---|
 | **TB-1** | `CajuCore`, `CajuScene` | ECS mínimo híbrido, `Query` com PoC de packs + SIL, agendador single-thread com validação de acesso, mensagens, estados, tempo, `@Component` com `componentID` e reflexão estática, Transform/hierarquia |
 | **TB-2** | `CajuPlatform`, `CajuRHI`, backend Metal | Janela iOS/macOS, RHI com render pass + transient + frame graph, Slang → MSL, cubo e botão com texto em aparelho real |
-| **TB-Android** | Platform Android, backend Vulkan | Gradle/CMake/JNI/`libswiftCore.so`, Game Thread, Vulkan próprio + VMA no S22; **timebox de 5 dias**, kill-criteria definidos antes de começar |
+| **TB-Android** | Platform Android, backend Vulkan | Gradle/CMake/JNI/`libswiftCore.so`, Game Thread, Vulkan próprio + VMA no S22; **timebox de 3 dias** (interromper e reabrir ADR 0001/0008 se ultrapassar; [ADR 0011](adr/0011-kill-criteria-tb-android.md)) |
 | **P-1** | `CajuMath` completo | SIMD, interseções, cor, easing, testes de propriedade |
 | **P-2** | `CajuAssetsCore` | glTF (validação rigorosa), KTX2/Basis, meshopt, PNG/JPEG, *fuzz* |
 | **P-3** | `CajuPhysicsSpatial` | BVH dinâmica, raycast/shapecast/sobreposição |
@@ -115,7 +115,7 @@ Qualquer trabalho de engine só depois do M-1. Render integrado, UI integrada, a
 | M-1 | `CLAUDE.md`, standards e skills do projeto aceitos; avaliação de terceiros registrada |
 | M0 | Pacote compila em macOS/Linux; iOS e Android compilam; CI verde e aplicando os padrões. **Estado:** Linux verificado localmente (build, testes, TSan, lint); macOS/iOS/Android dependem do CI |
 | M1 | Núcleos puros P-1..P-5 com testes e fuzz; benchmarks ECS/layout dentro da meta |
-| M2 | Cubo texturizado e botão com texto em iPhone 16 Pro (Metal) e, se o timebox permitir, no S22 (Vulkan) |
+| M2 | Cubo texturizado e botão com texto em iPhone 16 Pro (Metal) e, se o timebox de 3 dias permitir, no S22 (Vulkan) |
 | Gate | Critérios do ADR 0006 |
 | M3 | Cena glTF com skinning e UI em demo |
 | M4 | Vertical slice medido nos aparelhos de referência |
@@ -150,4 +150,4 @@ Qualquer trabalho de engine só depois do M-1. Render integrado, UI integrada, a
 | D8 | iOS 17 / Android API 29 | **Decidido** |
 | D9 | M-1 (qualidade e padrões) antes do M0 | **Decidido** (ADR 0009) |
 
-Em aberto: definir kill-criteria do TB-Android; validar os jobs experimentais de CI (Android, host Apple). Variante do S22 confirmada: S22+ Snapdragon.
+Em aberto: validar os jobs experimentais de CI (Android, host Apple). Variante do S22 confirmada: S22+ Snapdragon.

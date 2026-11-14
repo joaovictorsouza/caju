@@ -10,7 +10,7 @@
 2. **Onda 0.5** em paralelo:
    - **Tracer bullet:** TB-1 (Core/ECS mínimo + Scene) e TB-2 (Platform + RHI + Metal + um botão com texto em aparelho real).
    - **Núcleos puros de CPU (sem GPU/ECS, contrato estável):** P-1 Math, P-2 parsers glTF/KTX2/meshopt (+ fuzz), P-3 BVH, P-4 UI layout, P-5 texto (shaping + atlas MSDF em bitmap de CPU).
-   - **TB-Android** (trilha separada, limite de 5 dias): Gradle/CMake/JNI/`libswiftCore.so`, Vulkan próprio + VMA no Galaxy S22. Se o Swift no Android travar, iOS/macOS e módulos puros seguem sem esperar. **Kill-criteria** explícitos a definir antes do início.
+   - **TB-Android** (trilha separada, limite de 5 dias; **revisado para 3 dias pelo [ADR 0011](0011-kill-criteria-tb-android.md)**): Gradle/CMake/JNI/`libswiftCore.so`, Vulkan próprio + VMA no Galaxy S22. Se o Swift no Android travar, iOS/macOS e módulos puros seguem sem esperar. **Kill-criteria** explícitos a definir antes do início.
 3. **Gate de saída** (proposta; números a calibrar por aparelho de referência):
    - 50 ciclos de background/resume, rotação e recriação de superfície: ΔRSS ≤ 1 MB e zero erro de validação.
    - Soak de 5 min com cenário definido por aparelho, p95 < 16 ms, com degradação controlada (não "zero throttling").
