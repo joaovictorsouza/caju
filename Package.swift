@@ -3,6 +3,7 @@
 // Manifesto do Caju. TRANCADO: mudanças aqui vão em PR dedicado e curto
 // (CLAUDE.md, docs/standards/pr-e-revisao.md). Os targets abaixo seguem o mapa
 // de camadas do plano (§5): dependências só para baixo.
+import CompilerPluginSupport
 import PackageDescription
 
 /// Configurações comuns a todos os targets: Swift 6 (concorrência estrita) e
