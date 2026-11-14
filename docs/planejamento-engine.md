@@ -70,7 +70,7 @@ Nenhuma sessão de engine começa antes de este passo ser aceito (merge). Entreg
 3. **Skills do projeto** em `.claude/skills/`: `caju-docs-sync` (manter docs, ADRs e standards atualizados a cada mudança), `caju-swift-quality`, `caju-testing`, `caju-new-module`.
 4. **Avaliação de skills/specs de terceiros** (formatadores, linters, guias de Swift e concorrência, skills públicas): ler, checar licença e origem e adotar só o que for revisado, com versão fixada; nada é executado sem revisão (ADR 0009).
 5. **Impor no CI no M0** o que for automatizável (swift-format, lint, `-warnings-as-errors`, TSan, tamanho, benchmarks).
-Primeira versão de 1 a 4 já está no PR #1; o restante do M-1 é a avaliação de terceiros e o aceite do dono.
+Primeira versão de 1 a 4 já está no PR #1. Avaliação de terceiros concluída em 2026-11-14: adotadas `swift-concurrency-pro` e `swift-testing-expert` (versão fixada, ver `docs/standards/README.md`); falta o aceite do dono do M-1.
 
 ### M0: fundação (sequencial, 1 sessão)
 `Package.swift` com todos os targets (trancado depois), CI Linux/macOS + build iOS/Android aplicando os padrões do M-1, host iOS/macOS, tipos primitivos de `CajuMath`, `CODEOWNERS`, template de PR com o *definition of done*, harness de benchmark e fuzz, renomear prefixo `Caju*`.
