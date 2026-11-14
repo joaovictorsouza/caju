@@ -81,7 +81,7 @@ Escopo original:
 ### Onda 0.5: em paralelo (≈ 8 sessões)
 | Trilha | Módulo(s) | Entrega |
 |---|---|---|
-| **TB-1** | `CajuCore`, `CajuScene` | ECS mínimo híbrido, `Query` com PoC de packs + SIL, agendador single-thread com validação de acesso, mensagens, estados, tempo, `@Component` com `componentID` e reflexão estática, Transform/hierarquia |
+| **TB-1** | `CajuCore`, `CajuScene` | ECS mínimo híbrido, `Query` com PoC de packs + SIL, agendador single-thread com validação de acesso, mensagens, estados, tempo, `componentID` estático por protocolo (macro `@Component` adiada: exige `swift-syntax`; [ADR 0014](adr/0014-ecs-query-e-component.md)), Transform/hierarquia |
 | **TB-2** | `CajuPlatform`, `CajuRHI`, backend Metal | Janela iOS/macOS, RHI com render pass + transient + frame graph, Slang → MSL, cubo e botão com texto em aparelho real |
 | **TB-Android** | Platform Android, backend Vulkan | Gradle/CMake/JNI/`libswiftCore.so`, Game Thread, Vulkan próprio + VMA no S22; **timebox de 5 dias**, kill-criteria definidos antes de começar |
 | **P-1** | `CajuMath` completo | SIMD, interseções, cor, easing, testes de propriedade (**código e testes entregues**; falta benchmark no harness) |
@@ -129,7 +129,7 @@ Qualquer trabalho de engine só depois do M-1. Render integrado, UI integrada, a
 | Vulkan próprio é o maior risco de esforço | Validar no S22 cedo; reabrir ADR 0001 se estourar |
 | Compilação lenta (packs/macros) | Medir no CI; fronteiras de módulo |
 | Escopo do rascunho | Perfil MVP e módulos opcionais |
-| ECS + concorrência estrita | PoC de `Query`/SIL antes de congelar API; TSan |
+| ECS + concorrência estrita | PoC de `Query`/SIL antes de congelar API; TSan. **Feito (TB-1):** packs reprovaram no SIL (*witness* por linha, ~10× mais lentos); API usa overloads de aridade 1..8 ([ADR 0014](adr/0014-ecs-query-e-component.md)) |
 | Dependências C/C++ | Targets SwiftPM, versões fixas, CI nos SOs |
 | Texto internacional | Escalonar por script; IME de plataforma no início |
 | Perda de superfície/dispositivo | Testes forçados desde M2 |

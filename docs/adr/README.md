@@ -16,4 +16,5 @@ Uma página curta por decisão. Formato: **Status**, **Contexto**, **Decisão**,
 | [0010](0010-fundacao-m0.md) | Fundação do M0: pacote, CI, host, prefixo `Caju*` | Aceito |
 | [0012](0012-texto-p5.md) | Texto do MVP (P-5): TrueType em Swift, shaper plugável, MSDF em CPU | Aceito |
 | [0013](0013-layout-de-ui-por-faixas.md) | Layout de UI por faixas de tamanho (P-4) | Aceito |
+| [0014](0014-ecs-query-e-component.md) | ECS da TB-1: Query por aridade 1..8 e Component por protocolo | Aceito |
 | [0018](0018-bvh-e-primitivas-espaciais.md) | P-3: BVH dinâmica, primitivas espaciais e consultas sem alocação | Aceito |
