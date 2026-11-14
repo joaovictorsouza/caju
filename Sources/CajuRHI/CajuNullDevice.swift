@@ -276,7 +276,7 @@ public struct CajuNullQueue: CajuQueue {
         CajuNullCommandBuffer(device: device, label: label)
     }
 
-    public func submit(_ commandBuffer: consuming CajuNullCommandBuffer) throws(CajuRHIError) {
+    public func submit(_ commandBuffer: CajuNullCommandBuffer) throws(CajuRHIError) {
         var commands = commandBuffer.commands
         commands.append(.submit(label: commandBuffer.label))
         device.record(commands)

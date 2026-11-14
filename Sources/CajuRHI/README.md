@@ -12,7 +12,7 @@ Interface de abstração de GPU (RHI) para Metal e Vulkan, desenhada para os doi
 | Formatos | `CajuPixelFormat` (inclui ASTC 4x4 a 8x8), `CajuSampleCounts`, `CajuDeviceCapabilities` |
 | Pipelines | `CajuRenderPipelineDescriptor` (vértices, cor, profundidade, mistura, amostras), `CajuComputePipelineDescriptor` |
 | Passes | `CajuRenderPassDescriptor` com `load`/`store`/`resolve`; `memoryless` = `TransientAttachment` |
-| Comandos | `CajuRenderDevice`, `CajuQueue`, `CajuCommandBuffer` (`~Copyable`), `CajuRenderEncoder`/`CajuComputeEncoder`/`CajuCopyEncoder` (`~Copyable`, em *closures*) |
+| Comandos | `CajuRenderDevice`, `CajuQueue`, `CajuCommandBuffer`, `CajuRenderEncoder`/`CajuComputeEncoder`/`CajuCopyEncoder` (tipos `Copyable`; encoders só em *closures*; `~Copyable` em tipo associado exige Swift 6.3+, ADR 0015) |
 | Superfície | `CajuSurfaceDescriptor`, `CajuSwapchain` (`recreate`, `releaseSurface`), `CajuSwapchainImage` (`~Copyable`) |
 | Frame graph | `CajuFrameGraphBuilder` → `compile` → `CajuCompiledFrameGraph` (corte, lifetimes, aliasing, memoryless) → `CajuFrameGraphExecutor` |
 | Upload | `CajuUploadBudget` |

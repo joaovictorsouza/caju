@@ -1,6 +1,6 @@
 // Command buffer, encoders e swapchain do backend null.
 
-public struct CajuNullCommandBuffer: CajuCommandBuffer, ~Copyable {
+public struct CajuNullCommandBuffer: CajuCommandBuffer {
     public typealias RenderEncoder = CajuNullRenderEncoder
     public typealias ComputeEncoder = CajuNullComputeEncoder
     public typealias CopyEncoder = CajuNullCopyEncoder
@@ -66,7 +66,7 @@ public struct CajuNullCommandBuffer: CajuCommandBuffer, ~Copyable {
     }
 }
 
-public struct CajuNullRenderEncoder: CajuRenderEncoder, ~Copyable {
+public struct CajuNullRenderEncoder: CajuRenderEncoder {
     unowned let device: CajuNullDevice
     var commands: [CajuNullCommand] = []
     var error: CajuRHIError?
@@ -143,7 +143,7 @@ public struct CajuNullRenderEncoder: CajuRenderEncoder, ~Copyable {
     }
 }
 
-public struct CajuNullComputeEncoder: CajuComputeEncoder, ~Copyable {
+public struct CajuNullComputeEncoder: CajuComputeEncoder {
     var commands: [CajuNullCommand] = []
     var error: CajuRHIError?
 
@@ -167,7 +167,7 @@ public struct CajuNullComputeEncoder: CajuComputeEncoder, ~Copyable {
     }
 }
 
-public struct CajuNullCopyEncoder: CajuCopyEncoder, ~Copyable {
+public struct CajuNullCopyEncoder: CajuCopyEncoder {
     unowned let device: CajuNullDevice
     var commands: [CajuNullCommand] = []
     var error: CajuRHIError?

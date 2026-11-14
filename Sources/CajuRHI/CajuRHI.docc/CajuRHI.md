@@ -4,7 +4,7 @@ Interface de GPU para Metal e Vulkan: handles geracionais, render pass com trans
 
 ## Visão geral
 
-O dispositivo (``CajuRenderDevice``) cria recursos e entrega a fila (``CajuQueue``); um ``CajuCommandBuffer`` grava passes de render, compute e cópia em *closures* que entregam encoders `~Copyable`. O ``CajuFrameGraphBuilder`` declara passes e recursos de um quadro e ``CajuCompiledFrameGraph`` decide quais texturas são `memoryless` e quais compartilham memória.
+O dispositivo (``CajuRenderDevice``) cria recursos e entrega a fila (``CajuQueue``); um ``CajuCommandBuffer`` grava passes de render, compute e cópia em *closures* que entregam encoders que não escapam do passe. O ``CajuFrameGraphBuilder`` declara passes e recursos de um quadro e ``CajuCompiledFrameGraph`` decide quais texturas são `memoryless` e quais compartilham memória.
 
 ## Tópicos
 

@@ -43,15 +43,13 @@ public final class CajuGameThread: @unchecked Sendable {
         let code = pthread_create(
             &created, nil,
             { argument in
-                #if canImport(Darwin)
-                    let box = Unmanaged<Box>.fromOpaque(argument).takeRetainedValue()
-                #else
-                    let box = Unmanaged<Box>.fromOpaque(argument!).takeRetainedValue()
-                #endif
+                // `argument` é opcional no Glibc e não opcional no Darwin/Bionic: a conversão cobre os dois.
+                guard let raw = argument as UnsafeMutableRawPointer? else { return nil }
+                let box = Unmanaged<Box>.fromOpaque(raw).takeRetainedValue()
+                // `pthread_setname_np` com nome da própria thread só existe no Darwin; no Glibc/Bionic
+                // o símbolo não é exposto ao Swift (sem `_GNU_SOURCE`), então o nome é omitido.
                 #if canImport(Darwin)
                     _ = pthread_setname_np(box.name)
-                #else
-                    _ = pthread_setname_np(pthread_self(), box.name)
                 #endif
                 box.body()
                 return nil

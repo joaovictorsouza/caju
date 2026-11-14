@@ -2,8 +2,8 @@
 //
 // Decisões de forma:
 // - Protocolos com tipos associados e uso genérico (`some CajuRenderDevice`): sem `any` no caminho quente.
-// - Command buffers, encoders e imagens de *swapchain* são `~Copyable`: o compilador impede terminar
-//   um encoder duas vezes ou apresentar uma imagem duas vezes.
+// - Só `CajuSwapchainImage` é `~Copyable` (apresentar duas vezes não compila). Command buffers e encoders
+//   são `Copyable`: `~Copyable` em `associatedtype` exige Swift 6.3+ e a engine fixa 6.2 (ADR 0015).
 // - Encoders vivem dentro de um *closure* (`withRenderPass`): não podem escapar do passe.
 // - Erros de gravação (dentro do encoder) são acumulados e lançados no fim do passe, como `throws(CajuRHIError)`.
 // - Dispositivo e fila não são `Sendable`: pertencem à thread de jogo (ADR 0008).
@@ -16,7 +16,7 @@ public enum CajuShaderStage: UInt8, Sendable, Hashable {
 }
 
 /// Encoder de comandos de desenho dentro de um passe de render.
-public protocol CajuRenderEncoder: ~Copyable {
+public protocol CajuRenderEncoder {
     mutating func setPipeline(_ pipeline: CajuRenderPipelineHandle)
     mutating func setViewport(_ viewport: CajuViewport)
     mutating func setScissor(_ rect: CajuScissorRect)
@@ -36,7 +36,7 @@ public protocol CajuRenderEncoder: ~Copyable {
         indexOffset: Int, baseVertex: Int, firstInstance: Int)
 }
 
-extension CajuRenderEncoder where Self: ~Copyable {
+extension CajuRenderEncoder {
     /// Desenho simples sem instanciamento.
     public mutating func draw(vertexCount: Int) {
         draw(vertexCount: vertexCount, instanceCount: 1, firstVertex: 0, firstInstance: 0)
@@ -44,7 +44,7 @@ extension CajuRenderEncoder where Self: ~Copyable {
 }
 
 /// Encoder de comandos de compute.
-public protocol CajuComputeEncoder: ~Copyable {
+public protocol CajuComputeEncoder {
     mutating func setPipeline(_ pipeline: CajuComputePipelineHandle)
     mutating func setBuffer(_ buffer: CajuBufferHandle, offset: Int, index: Int)
     mutating func setBytes(_ bytes: UnsafeRawBufferPointer, index: Int)
@@ -55,7 +55,7 @@ public protocol CajuComputeEncoder: ~Copyable {
 }
 
 /// Encoder de cópias (uploads e *readbacks* GPU-GPU).
-public protocol CajuCopyEncoder: ~Copyable {
+public protocol CajuCopyEncoder {
     mutating func copyBuffer(
         from source: CajuBufferHandle, sourceOffset: Int, to destination: CajuBufferHandle,
         destinationOffset: Int, size: Int)
@@ -66,10 +66,10 @@ public protocol CajuCopyEncoder: ~Copyable {
 }
 
 /// Sequência de passes gravados para uma submissão.
-public protocol CajuCommandBuffer: ~Copyable {
-    associatedtype RenderEncoder: CajuRenderEncoder & ~Copyable
-    associatedtype ComputeEncoder: CajuComputeEncoder & ~Copyable
-    associatedtype CopyEncoder: CajuCopyEncoder & ~Copyable
+public protocol CajuCommandBuffer {
+    associatedtype RenderEncoder: CajuRenderEncoder
+    associatedtype ComputeEncoder: CajuComputeEncoder
+    associatedtype CopyEncoder: CajuCopyEncoder
 
     /// Grava um passe de render. Lança o primeiro erro de validação/gravação ao fim do passe.
     mutating func withRenderPass(
@@ -87,12 +87,12 @@ public protocol CajuCommandBuffer: ~Copyable {
 
 /// Fila de submissão de uma GPU.
 public protocol CajuQueue {
-    associatedtype CommandBuffer: CajuCommandBuffer & ~Copyable
+    associatedtype CommandBuffer: CajuCommandBuffer
 
     func makeCommandBuffer(label: String) throws(CajuRHIError) -> CommandBuffer
 
     /// Envia o command buffer à GPU (consome-o). Não bloqueia até o fim da execução.
-    func submit(_ commandBuffer: consuming CommandBuffer) throws(CajuRHIError)
+    func submit(_ commandBuffer: CommandBuffer) throws(CajuRHIError)
 
     /// Bloqueia até a fila ficar ociosa (usar em transições de ciclo de vida e testes, nunca por quadro).
     func waitUntilIdle() throws(CajuRHIError)

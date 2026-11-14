@@ -13,7 +13,7 @@
             return CajuMetalCommandBuffer(device: device, commandBuffer: cb)
         }
 
-        public func submit(_ commandBuffer: consuming CajuMetalCommandBuffer) throws(CajuRHIError) {
+        public func submit(_ commandBuffer: CajuMetalCommandBuffer) throws(CajuRHIError) {
             let device = commandBuffer.device
             let cb = commandBuffer.commandBuffer
             for index in commandBuffer.presentedTextures { device.releaseDrawableTexture(index) }
@@ -27,7 +27,7 @@
         }
     }
 
-    public struct CajuMetalCommandBuffer: CajuCommandBuffer, ~Copyable {
+    public struct CajuMetalCommandBuffer: CajuCommandBuffer {
         public typealias RenderEncoder = CajuMetalRenderEncoder
         public typealias ComputeEncoder = CajuMetalComputeEncoder
         public typealias CopyEncoder = CajuMetalCopyEncoder
@@ -126,7 +126,7 @@
         func releaseDrawableTexture(_ handle: CajuTextureHandle) { destroy(handle) }
     }
 
-    public struct CajuMetalRenderEncoder: CajuRenderEncoder, ~Copyable {
+    public struct CajuMetalRenderEncoder: CajuRenderEncoder {
         unowned let device: CajuMetalDevice
         let encoder: any MTLRenderCommandEncoder
         var error: CajuRHIError?
@@ -241,7 +241,7 @@
         }
     }
 
-    public struct CajuMetalComputeEncoder: CajuComputeEncoder, ~Copyable {
+    public struct CajuMetalComputeEncoder: CajuComputeEncoder {
         unowned let device: CajuMetalDevice
         let encoder: any MTLComputeCommandEncoder
         var error: CajuRHIError?
@@ -291,7 +291,7 @@
         }
     }
 
-    public struct CajuMetalCopyEncoder: CajuCopyEncoder, ~Copyable {
+    public struct CajuMetalCopyEncoder: CajuCopyEncoder {
         unowned let device: CajuMetalDevice
         let encoder: any MTLBlitCommandEncoder
         var error: CajuRHIError?
