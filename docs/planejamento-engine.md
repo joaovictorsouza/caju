@@ -1,7 +1,7 @@
 # Caju: planejamento da engine 3D em Swift (v2)
 
 > **Status:** v2, integra o plano original, a discussão de arquitetura com o Argon e as decisões do dono (2026-11-14). Justificativas detalhadas ficam nos [ADRs](adr/README.md); este documento é a **visão atual**. O rascunho `engine-swift-especificacao.md` continua como **catálogo de requisitos**, não como contrato: qualquer restrição dele pode ser trocada por algo melhor.
-> Estimativas marcadas com (?) não foram medidas. **M0 implementado** (pacote, CI, host, `CajuMath` primitivo; [ADR 0010](adr/0010-fundacao-m0.md)); os demais módulos são só declarados.
+> Estimativas marcadas com (?) não foram medidas. **M0 implementado** (pacote, CI, host, `CajuMath` primitivo, depois completo pela P-1; [ADR 0010](adr/0010-fundacao-m0.md)); os demais módulos são só declarados.
 > Padrões e regras de documentação viva: [`CLAUDE.md`](../CLAUDE.md) e [`docs/standards/`](standards/README.md). **Este documento deve ser atualizado a cada mudança que altere escopo, ordem, marcos, riscos ou decisões.**
 > Histórico: [discussao-arquitetura-argon.md](discussao-arquitetura-argon.md).
 
@@ -84,7 +84,7 @@ Escopo original:
 | **TB-1** | `CajuCore`, `CajuScene` | ECS mínimo híbrido, `Query` com PoC de packs + SIL, agendador single-thread com validação de acesso, mensagens, estados, tempo, `@Component` com `componentID` e reflexão estática, Transform/hierarquia |
 | **TB-2** | `CajuPlatform`, `CajuRHI`, backend Metal | Janela iOS/macOS, RHI com render pass + transient + frame graph, Slang → MSL, cubo e botão com texto em aparelho real |
 | **TB-Android** | Platform Android, backend Vulkan | Gradle/CMake/JNI/`libswiftCore.so`, Game Thread, Vulkan próprio + VMA no S22; **timebox de 5 dias**, kill-criteria definidos antes de começar |
-| **P-1** | `CajuMath` completo | SIMD, interseções, cor, easing, testes de propriedade |
+| **P-1** | `CajuMath` completo | SIMD, interseções, cor, easing, testes de propriedade (**código e testes entregues**; falta benchmark no harness) |
 | **P-2** | `CajuAssetsCore` | glTF (validação rigorosa), KTX2/Basis, meshopt, PNG/JPEG, *fuzz* |
 | **P-3** | `CajuPhysicsSpatial` | BVH dinâmica, raycast/shapecast/sobreposição |
 | **P-4** | `CajuUILayout` | Árvore retida, layout SwiftUI-like por faixas de tamanho ([ADR 0013](adr/0013-layout-de-ui-por-faixas.md)), stacks/ZStack/frame/padding/Spacer, hit-testing. **Implementado** (benchmark/testes dependem de PR de `Package.swift`) |
