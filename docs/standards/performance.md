@@ -3,7 +3,7 @@
 Metas medidas nos aparelhos de referência (Galaxy S22, iPhone 16 Pro; ADR 0007). Estimativas `(?)` até medir.
 
 - **ECS:** ≥ 100 000 entidades com 3 componentes por consulta em < 2 ms no aparelho alto; `spawn` ≥ 1 milhão/s.
-- **Layout de UI:** 1 000 nós em < 1 ms de CPU com árvore estável; UI de tela cheia ≤ 1,5 ms CPU/quadro.
+- **Layout de UI:** 1 000 nós em < 1 ms de CPU com árvore estável; UI de tela cheia ≤ 1,5 ms CPU/quadro. Medido (P-4, Linux x86-64 de nuvem, release, relayout completo de ~1 000 nós): ≈ 45 µs; hit-test ≈ 0,1–0,3 µs. Ainda sem medida nos aparelhos de referência `(?)`.
 - **Draw calls:** ≤ 300 por quadro; UI ≤ 40.
 - **Memória:** GPU ≤ 300 MB; residente ≤ 600 MB no cenário de referência.
 - **Sem travadas:** nenhum quadro > 50 ms por compilação de pipeline, upload de textura ou carga de asset.

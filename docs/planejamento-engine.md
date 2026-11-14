@@ -87,7 +87,7 @@ Escopo original:
 | **P-1** | `CajuMath` completo | SIMD, interseções, cor, easing, testes de propriedade |
 | **P-2** | `CajuAssetsCore` | glTF (validação rigorosa), KTX2/Basis, meshopt, PNG/JPEG, *fuzz*. Feito em Swift puro, exceto transcodificação Basis/Zstd e pixels JPEG (pendentes; ADR 0017) |
 | **P-3** | `CajuPhysicsSpatial` | BVH dinâmica, raycast/shapecast/sobreposição |
-| **P-4** | `CajuUILayout` | Árvore retida, protocolo de layout SwiftUI-like, stacks/ZStack/frame/Spacer, hit-testing |
+| **P-4** | `CajuUILayout` | Árvore retida, layout SwiftUI-like por faixas de tamanho ([ADR 0013](adr/0013-layout-de-ui-por-faixas.md)), stacks/ZStack/frame/padding/Spacer, hit-testing. **Implementado** (benchmark/testes dependem de PR de `Package.swift`) |
 | **P-5** | `CajuText` | Shaping, medida, quebra de linha, atlas MSDF em bitmap de CPU, modelo do `TextEditor` |
 
 P-1 a P-5 não dependem de GPU nem de ECS e têm contrato estável (dados de entrada → dados de saída), por isso rodam em paralelo desde o início. Toda trilha segue as skills do M-1 e atualiza a documentação no mesmo PR.
