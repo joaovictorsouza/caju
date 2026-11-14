@@ -4,7 +4,7 @@ Backend Metal do RHI (Apple).
 
 - **Camada:** 2 (dependências só para baixo; ver §5 do plano).
 - **Trilha dona:** TB-2.
-- **Estado:** apenas declarado (M0); sem API pública além do marcador `CajuRHIMetalModule`.
+- **Estado:** pendente (Fase 2).
 
 ## Dependências
 - `CajuRHI`
