@@ -1,0 +1,74 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 5 * * *" # noturno: mais iterações de fuzz quando existirem
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    container: swift:6.2
+    steps:
+      - uses: actions/checkout@v4
+      - name: swift-format (estrito)
+        run: swift format lint --strict -r Sources Tests Package.swift
+      - name: Construções proibidas
+        run: scripts/check-forbidden.sh
+
+  linux:
+    runs-on: ubuntu-24.04
+    container: swift:6.2
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build (avisos são erros via Package.swift)
+        run: swift build
+      - name: Testes
+        run: swift test
+      - name: Thread Sanitizer
+        run: swift test --sanitize=thread
+      - name: Benchmarks (JSON)
+        run: swift run -c release caju-bench | tee bench.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bench-linux
+          path: bench.json
+
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift --version
+      - name: Build e testes
+        run: swift build && swift test
+      - name: Build para iOS (device)
+        run: xcodebuild -scheme Caju-Package -destination 'generic/platform=iOS' build
+
+  android:
+    # Experimental até o TB-Android fixar o SDK e o kill-criteria (ADR 0008).
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: swiftlang/swift-android-action@v2
+        with:
+          swift-version: "6.2"
+          android-api-level: 29
+          build-tests: true
+          run-tests: false
+
+  apple-host:
+    # Experimental até a primeira execução verde (Hosts/Apple/README.md).
+    runs-on: macos-15
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: cd Hosts/Apple && xcodegen generate
+      - run: cd Hosts/Apple && xcodebuild -project CajuHost.xcodeproj -scheme CajuHost-macOS build CODE_SIGNING_ALLOWED=NO
+      - run: cd Hosts/Apple && xcodebuild -project CajuHost.xcodeproj -scheme CajuHost-iOS -destination 'generic/platform=iOS Simulator' build CODE_SIGNING_ALLOWED=NO
