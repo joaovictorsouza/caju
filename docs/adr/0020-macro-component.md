@@ -17,6 +17,7 @@ O ADR 0014 definiu `CajuComponent` por protocolo com `static var componentID` ma
 - Gerar o ID por hash/nome em tempo de execução: perde o `componentID` estático e a faixa por camada (0–15 núcleo, 16–47 módulos, 48–63 jogo).
 
 ## Consequências
+- Job `android` (experimental): o teste de integração que **usa** a macro fica fora do Android (`#if !os(Android)`), pois o build cruzado com índice falha ao abrir o índice do código expandido; reavaliar quando o SDK Android fixar (ADR 0008).
 - Build limpo mais lento por compilar `swift-syntax` (tempo não medido `(?)`; medir no CI, conforme o plano §risco de compilação). Builds incrementais não recompilam a dependência.
 - A primeira resolução do pacote baixa `swift-syntax` (rede no CI/ambiente de build).
 - `@Component(id:)` futuramente pode crescer (`@Message`, `@Resource`, `#shader`, previstos no plano) no mesmo plugin.

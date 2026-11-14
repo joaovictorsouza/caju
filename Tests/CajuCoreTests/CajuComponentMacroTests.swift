@@ -1,3 +1,7 @@
+// Fora do Android: no build cruzado (swift-android-action, com índice ligado) o SwiftPM falha ao abrir
+// o índice do código expandido da macro ("Failed opening .../index/store/...CajuComponentMacroTests...").
+// O CajuCore em si compila; só o uso da macro neste teste é pulado até o job Android estabilizar (ADR 0020).
+#if !os(Android)
 import CajuCore
 import Testing
 
@@ -22,3 +26,4 @@ struct CajuComponentMacroTests {
         #expect(sum == 3)
     }
 }
+#endif
