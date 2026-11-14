@@ -103,6 +103,7 @@ Brief proposto (trilhas S-0, A-1, A-2, R-1, V-1, I-1, U-1, AN-1, PH-1, AU-1, T-1
 
 ### Depois
 **Vertical slice medido** (personagem animado com skinning, UI de loja, câmera, toque; NFR-001/002/003/008/009 nos aparelhos de referência) → v1.0 (texto completo, acessibilidade, i18n, LOD, quirks, conteúdo remoto, Toon) → opcionais (camera rig, Luau, física dinâmica, backend WebGPU).
+**Onda 2 (futura, registrada para não ser esquecida):** física dinâmica (corpos rígidos, colisão com resposta, restrições) como módulo opcional por *trait*, depois do vertical slice; a Onda 1 entrega só consultas espaciais e kinematic (PH-1). Decidido em 2026-11-14; brief e ADR próprios ao iniciar.
 
 ### Regras de paralelismo
 1. Um diretório = um dono por vez. 2. `Package.swift` e CI trancados (PR dedicado e curto para mudar). 3. Mudança de API entre módulos: PR de contrato antes do uso. 4. Sem `Utils.swift` compartilhado. 5. Gerados em `Generated/`, determinísticos. 6. PRs pequenos, *rebase* frequente, `CODEOWNERS`. 7. ADRs e docs de arquitetura só pela sessão coordenadora; trilhas propõem em PR separado.

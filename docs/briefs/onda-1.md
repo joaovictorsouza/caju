@@ -79,6 +79,6 @@ Plano (§8 "Onda 1": link para este brief e ordem) e `docs/adr/README.md` (nota 
 
 ## 9. Decisões do dono e ponto em aberto
 1. **S-0 antes de todas:** decidido (2026-11-14). As demais trilhas só começam depois dos contratos de A-1, R-1 e U-1 em PR draft; as trilhas puras do Antigravity podem iniciar já com contrato publicado.
-2. **Física dinâmica e macro `@Component` fora da Onda 1:** em aberto (o impacto está sendo explicado ao dono). Por padrão ficam fora.
+2. **Física dinâmica e macro `@Component` fora da Onda 1:** decidido (2026-11-14). A macro segue em PR próprio (PR #20), fora das trilhas. A **física dinâmica** (corpos rígidos, colisão com resposta, restrições) fica registrada como **fase futura, Onda 2**, depois do vertical slice, como módulo opcional por *trait* sobre `CajuPhysicsSpatial` e `CajuPhysics`. A PH-1 entrega só consultas (*raycast*/*shapecast*, *picking*) e kinematic simples. Abrir ADR e brief próprios ao iniciar a Onda 2.
 3. **`miniaudio` e HarfBuzz/FreeType:** aprovados como target C com versão fixa em PR dedicado (política do ADR 0005).
 4. **Divisão de execução:** ~70 % Claude / ~30 % Antigravity (§3).
