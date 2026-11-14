@@ -15,3 +15,17 @@ Metas medidas nos aparelhos de referência (Galaxy S22, iPhone 16 Pro; ADR 0007)
 3. Otimização só com *benchmark* antes e depois no PR.
 4. Harness: `swift run -c release caju-bench` (JSON). O gate de 10 % só liga com linha de base de aparelho; números de runner de CI não são de referência.
 5. Tamanho de binário e tempo de compilação incremental medidos no CI; regressões aparecem no PR.
+
+## TB-2: frame graph e ciclos de superfície (medidos 2026-11-14, Mac Apple Silicon, **não são números de aparelho**)
+Fonte: `Tests/CajuModulesTests/CajuFrameGraphBenchmarkTests.swift` e `CajuMetalTests.swift` (CPU, backend null; 1000 iterações).
+
+| Cenário | Debug (`swift test`) mediana / p95 | Release (`swift test -c release`) mediana / p95 |
+|---|---|---|
+| `compile()` 5 passes | 25,8 / 26,2 µs | 3,5 / 3,6 µs |
+| `execute()+submit` 5 passes | 13,9 / 14,0 µs | 2,5 / 2,7 µs |
+| `compile()` 50 passes | 228,5 / 237,9 µs | 23,7 / 23,9 µs |
+| `execute()+submit` 50 passes | 124,8 / 128,1 µs | 21,6 / 21,8 µs |
+
+- 50 ciclos de background/resume (recriação de superfície com tamanho alternado, Metal, `CAMetalLayer` sem janela): ΔRSS = 0,14 MB (gate ADR 0006: ≤ 1 MB), recursos vivos constantes.
+- O benchmark roda como teste porque `caju-bench` depende de `Package.swift` (trancado); migrar para o executável é PR dedicado. Números de aparelho (iPhone 16 Pro, S22+) e p95 de quadro: `(?)`. Alocação por quadro do executor no estado estável não foi medida `(?)`.
+

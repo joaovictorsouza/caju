@@ -1,7 +1,7 @@
 # Caju: planejamento da engine 3D em Swift (v2)
 
 > **Status:** v2, integra o plano original, a discussão de arquitetura com o Argon e as decisões do dono (2026-11-14). Justificativas detalhadas ficam nos [ADRs](adr/README.md); este documento é a **visão atual**. O rascunho `engine-swift-especificacao.md` continua como **catálogo de requisitos**, não como contrato: qualquer restrição dele pode ser trocada por algo melhor.
-> Estimativas marcadas com (?) não foram medidas. **M0 implementado** (pacote, CI, host, `CajuMath` primitivo; [ADR 0010](adr/0010-fundacao-m0.md)); os demais módulos são só declarados.
+> Estimativas marcadas com (?) não foram medidas. **M0 implementado** (pacote, CI, host, `CajuMath` primitivo, depois completo pela P-1; [ADR 0010](adr/0010-fundacao-m0.md)); os demais módulos são só declarados.
 > Padrões e regras de documentação viva: [`CLAUDE.md`](../CLAUDE.md) e [`docs/standards/`](standards/README.md). **Este documento deve ser atualizado a cada mudança que altere escopo, ordem, marcos, riscos ou decisões.**
 > Histórico: [discussao-arquitetura-argon.md](discussao-arquitetura-argon.md).
 
@@ -81,14 +81,14 @@ Escopo original:
 ### Onda 0.5: em paralelo (≈ 8 sessões)
 | Trilha | Módulo(s) | Entrega |
 |---|---|---|
-| **TB-1** | `CajuCore`, `CajuScene` | ECS mínimo híbrido, `Query` com PoC de packs + SIL, agendador single-thread com validação de acesso, mensagens, estados, tempo, `@Component` com `componentID` e reflexão estática, Transform/hierarquia |
-| **TB-2** | `CajuPlatform`, `CajuRHI`, backend Metal | Janela iOS/macOS, RHI com render pass + transient + frame graph, Slang → MSL, cubo e botão com texto em aparelho real |
-| **TB-Android** | Platform Android, backend Vulkan | Gradle/CMake/JNI/`libswiftCore.so`, Game Thread, Vulkan próprio + VMA no S22; **timebox de 5 dias**, kill-criteria definidos antes de começar |
-| **P-1** | `CajuMath` completo | SIMD, interseções, cor, easing, testes de propriedade |
-| **P-2** | `CajuAssetsCore` | glTF (validação rigorosa), KTX2/Basis, meshopt, PNG/JPEG, *fuzz* |
-| **P-3** | `CajuPhysicsSpatial` | BVH dinâmica, raycast/shapecast/sobreposição |
+| **TB-1** | `CajuCore`, `CajuScene` | ECS mínimo híbrido, `Query` com PoC de packs + SIL, agendador single-thread com validação de acesso, mensagens, estados, tempo, `componentID` estático por protocolo (macro `@Component` adiada: exige `swift-syntax`; [ADR 0014](adr/0014-ecs-query-e-component.md)), Transform/hierarquia |
+| **TB-2** | `CajuPlatform`, `CajuRHI`, backend Metal | Janela iOS/macOS, RHI com render pass + transient + frame graph, Slang → MSL, cubo e botão com texto em aparelho real. **Fases 1 a 3 entregues no simulador: contrato, backend null, backend Metal, host Apple, demo cubo + botão, goldens e 50 ciclos (ΔRSS 0,14 MB no Mac) ([ADR 0015](adr/0015-contrato-rhi-e-platform.md), [brief](briefs/tb-2.md)); falta iPhone 16 Pro, toque e aliasing por heap `(?)`** |
+| **TB-Android** | Platform Android, backend Vulkan | NativeActivity em Swift, Game Thread, Vulkan próprio no S22+; **limite de 3 dias** ([ADR 0011](adr/0011-kill-criteria-tb-android.md)). **Estado (2026-11-13):** triângulo Vulkan em Swift rodando no S22+ com Game Thread própria ([ADR 0019](adr/0019-host-android-build-e-link.md), `Hosts/Android`); falta o backend `CajuRHI`, VMA, rotação e CI do APK |
+| **P-1** | `CajuMath` completo | SIMD, interseções, cor, easing, testes de propriedade (**entregue**: código, testes e benchmarks no `caju-bench`; medidas em M1 no README do módulo, falta linha de base em aparelho) |
+| **P-2** | `CajuAssetsCore` | glTF (validação rigorosa), KTX2/Basis, meshopt, PNG/JPEG, *fuzz*. Feito em Swift puro, exceto transcodificação Basis/Zstd e pixels JPEG (pendentes; ADR 0017) |
+| **P-3** | `CajuPhysicsSpatial` | BVH dinâmica e de triângulos, raycast/shapecast/sobreposição (**implementado**; testes em `CajuModulesTests`, benchmark pendente `(?)`, [ADR 0018](adr/0018-bvh-e-primitivas-espaciais.md)) |
 | **P-4** | `CajuUILayout` | Árvore retida, layout SwiftUI-like por faixas de tamanho ([ADR 0013](adr/0013-layout-de-ui-por-faixas.md)), stacks/ZStack/frame/padding/Spacer, hit-testing. **Implementado** (benchmark/testes dependem de PR de `Package.swift`) |
-| **P-5** | `CajuText` | Shaping, medida, quebra de linha, atlas MSDF em bitmap de CPU, modelo do `TextEditor` |
+| **P-5** | `CajuText` | Shaping, medida, quebra de linha, atlas MSDF em bitmap de CPU, modelo do `TextEditor` (sem dependências C; HarfBuzz/FreeType por PR dedicado, ver [ADR 0012](adr/0012-texto-p5.md)) |
 
 P-1 a P-5 não dependem de GPU nem de ECS e têm contrato estável (dados de entrada → dados de saída), por isso rodam em paralelo desde o início. Toda trilha segue as skills do M-1 e atualiza a documentação no mesmo PR.
 
@@ -115,7 +115,7 @@ Qualquer trabalho de engine só depois do M-1. Render integrado, UI integrada, a
 | M-1 | `CLAUDE.md`, standards e skills do projeto aceitos; avaliação de terceiros registrada |
 | M0 | Pacote compila em macOS/Linux; iOS e Android compilam; CI verde e aplicando os padrões. **Estado:** Linux verificado localmente (build, testes, TSan, lint); macOS/iOS/Android dependem do CI |
 | M1 | Núcleos puros P-1..P-5 com testes e fuzz; benchmarks ECS/layout dentro da meta |
-| M2 | Cubo texturizado e botão com texto em iPhone 16 Pro (Metal) e, se o timebox permitir, no S22 (Vulkan) |
+| M2 | Cubo texturizado e botão com texto em iPhone 16 Pro (Metal) e, se o timebox de 3 dias permitir, no S22 (Vulkan) |
 | Gate | Critérios do ADR 0006 |
 | M3 | Cena glTF com skinning e UI em demo |
 | M4 | Vertical slice medido nos aparelhos de referência |
@@ -129,7 +129,7 @@ Qualquer trabalho de engine só depois do M-1. Render integrado, UI integrada, a
 | Vulkan próprio é o maior risco de esforço | Validar no S22 cedo; reabrir ADR 0001 se estourar |
 | Compilação lenta (packs/macros) | Medir no CI; fronteiras de módulo |
 | Escopo do rascunho | Perfil MVP e módulos opcionais |
-| ECS + concorrência estrita | PoC de `Query`/SIL antes de congelar API; TSan |
+| ECS + concorrência estrita | PoC de `Query`/SIL antes de congelar API; TSan. **Feito (TB-1):** packs reprovaram no SIL (*witness* por linha, ~10× mais lentos); API usa overloads de aridade 1..8 ([ADR 0014](adr/0014-ecs-query-e-component.md)) |
 | Dependências C/C++ | Targets SwiftPM, versões fixas, CI nos SOs |
 | Texto internacional | Escalonar por script; IME de plataforma no início |
 | Perda de superfície/dispositivo | Testes forçados desde M2 |
@@ -150,4 +150,4 @@ Qualquer trabalho de engine só depois do M-1. Render integrado, UI integrada, a
 | D8 | iOS 17 / Android API 29 | **Decidido** |
 | D9 | M-1 (qualidade e padrões) antes do M0 | **Decidido** (ADR 0009) |
 
-Em aberto: definir kill-criteria do TB-Android; validar os jobs experimentais de CI (Android, host Apple). Variante do S22 confirmada: S22+ Snapdragon.
+Em aberto: validar os jobs experimentais de CI (Android, host Apple). Variante do S22 confirmada: S22+ Snapdragon.
