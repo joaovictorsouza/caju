@@ -63,3 +63,113 @@ internal func clampToFinite(_ v: Float) -> Float {
 internal func clampToFinite(_ v: SIMD3<Float>) -> SIMD3<Float> {
     SIMD3<Float>(clampToFinite(v.x), clampToFinite(v.y), clampToFinite(v.z))
 }
+
+@inlinable
+internal func validateAABB(_ box: CajuAABB) throws(CajuSpatialError) {
+    guard box.isFinite else {
+        throw .nonFiniteBounds
+    }
+    guard box.min.x <= box.max.x,
+        box.min.y <= box.max.y,
+        box.min.z <= box.max.z
+    else {
+        throw .invalidBounds
+    }
+}
+
+@inlinable
+internal func isValidAABB(_ box: CajuAABB) -> Bool {
+    box.isFinite
+        && box.min.x <= box.max.x
+        && box.min.y <= box.max.y
+        && box.min.z <= box.max.z
+}
+
+@inlinable
+internal func validateSphere(_ sphere: CajuSphere) throws(CajuSpatialError) {
+    guard sphere.isFinite else {
+        throw .nonFiniteInput
+    }
+    guard sphere.radius >= 0 else {
+        throw .invalidRadius
+    }
+}
+
+@inlinable
+internal func aabbCenter(_ box: CajuAABB) -> SIMD3<Float> {
+    box.min.storage * 0.5 + box.max.storage * 0.5
+}
+
+@inlinable
+internal func aabbHalfExtents(_ box: CajuAABB) -> SIMD3<Float> {
+    box.max.storage * 0.5 - box.min.storage * 0.5
+}
+
+@inlinable
+internal func aabbSurfaceArea(_ box: CajuAABB) -> Float {
+    let d = box.max.storage - box.min.storage
+    return 2.0 * (d.x * d.y + d.y * d.z + d.z * d.x)
+}
+
+@inlinable
+internal func aabbContains(_ outer: CajuAABB, _ inner: CajuAABB) -> Bool {
+    outer.min.x <= inner.min.x && outer.max.x >= inner.max.x
+        && outer.min.y <= inner.min.y && outer.max.y >= inner.max.y
+        && outer.min.z <= inner.min.z && outer.max.z >= inner.max.z
+}
+
+@inlinable
+internal func aabbEnlargedClamped(
+    _ box: CajuAABB,
+    margin: Float,
+    displacement: SIMD3<Float> = .zero
+) -> CajuAABB {
+    let m = SIMD3<Float>(repeating: margin)
+    var newMin = box.min.storage - m
+    var newMax = box.max.storage + m
+    if displacement.x < 0 { newMin.x += displacement.x } else { newMax.x += displacement.x }
+    if displacement.y < 0 { newMin.y += displacement.y } else { newMax.y += displacement.y }
+    if displacement.z < 0 { newMin.z += displacement.z } else { newMax.z += displacement.z }
+    // Garante que a caixa gorda sempre contenha a caixa original mesmo sob saturação.
+    newMin = SIMD3<Float>(
+        Swift.min(box.min.x, clampToFinite(newMin.x)),
+        Swift.min(box.min.y, clampToFinite(newMin.y)),
+        Swift.min(box.min.z, clampToFinite(newMin.z))
+    )
+    newMax = SIMD3<Float>(
+        Swift.max(box.max.x, clampToFinite(newMax.x)),
+        Swift.max(box.max.y, clampToFinite(newMax.y)),
+        Swift.max(box.max.z, clampToFinite(newMax.z))
+    )
+    return CajuAABB(min: CajuVec3(storage: newMin), max: CajuVec3(storage: newMax))
+}
+
+@inlinable
+internal func aabbOverlapsSphere(
+    _ box: CajuAABB,
+    center: SIMD3<Float>,
+    radius: Float
+) -> Bool {
+    let cx = Swift.max(box.min.x, Swift.min(center.x, box.max.x))
+    let cy = Swift.max(box.min.y, Swift.min(center.y, box.max.y))
+    let cz = Swift.max(box.min.z, Swift.min(center.z, box.max.z))
+    let dx = center.x - cx
+    let dy = center.y - cy
+    let dz = center.z - cz
+    let distSq = dx * dx + dy * dy + dz * dz
+    let rSq = radius * radius
+    if distSq.isFinite && rSq.isFinite {
+        return distSq <= rSq
+    }
+    let maxScale = Swift.max(Swift.abs(dx), Swift.max(Swift.abs(dy), Swift.abs(dz)))
+    let scale = Swift.max(maxScale, radius)
+    if scale <= 0 {
+        return true
+    }
+    let invScale = 1.0 / scale
+    let sx = dx * invScale
+    let sy = dy * invScale
+    let sz = dz * invScale
+    let sr = radius * invScale
+    return sx * sx + sy * sy + sz * sz <= sr * sr
+}

@@ -10,7 +10,15 @@ private func closeRelative(_ a: Float, _ b: Float, tolerance: Float = relToleran
     abs(a - b) <= tolerance * max(1.0, abs(a), abs(b))
 }
 
-private func randomBox(_ rng: inout CajuPCG32, range: ClosedRange<Float> = -25...25) throws -> CajuAABB {
+private func makeAABB(_ min: SIMD3<Float>, _ max: SIMD3<Float>) -> CajuAABB {
+    CajuAABB(min: CajuVec3(storage: min), max: CajuVec3(storage: max))
+}
+
+private func makeSphere(_ center: SIMD3<Float>, _ radius: Float) -> CajuSphere {
+    CajuSphere(center: CajuVec3(storage: center), radius: radius)
+}
+
+private func randomBox(_ rng: inout CajuPCG32, range: ClosedRange<Float> = -25...25) -> CajuAABB {
     let minP = SIMD3<Float>(
         rng.nextFloat(in: range),
         rng.nextFloat(in: range),
@@ -21,10 +29,10 @@ private func randomBox(_ rng: inout CajuPCG32, range: ClosedRange<Float> = -25..
         rng.nextUInt32() % 12 == 0 ? 0 : rng.nextFloat(in: 0.1...5.0),
         rng.nextUInt32() % 12 == 0 ? 0 : rng.nextFloat(in: 0.1...5.0)
     )
-    return try CajuAABB(min: minP, max: minP + size)
+    return makeAABB(minP, minP + size)
 }
 
-private func randomRay(_ rng: inout CajuPCG32, range: ClosedRange<Float> = -35...35) throws -> CajuRay {
+private func randomRay(_ rng: inout CajuPCG32, range: ClosedRange<Float> = -35...35) throws -> CajuRayQuery {
     let origin = SIMD3<Float>(
         rng.nextFloat(in: range),
         rng.nextFloat(in: range),
@@ -46,12 +54,12 @@ private func randomRay(_ rng: inout CajuPCG32, range: ClosedRange<Float> = -35..
 
     let tMin = rng.nextUInt32() % 5 == 0 ? rng.nextFloat(in: 0.05...2.0) : 0
     let tMax = tMin + rng.nextFloat(in: 1.0...100.0)
-    return try CajuRay(origin: origin, direction: dir, tMin: tMin, tMax: tMax)
+    return try CajuRayQuery(origin: origin, direction: dir, tMin: tMin, tMax: tMax)
 }
 
 /// Oráculo em precisão dupla para raio x AABB (usado para detectar empates de borda).
 private func doubleRayAABB(
-    ray: CajuRay,
+    ray: CajuRayQuery,
     box: CajuAABB
 ) -> (hit: Bool, nearBoundary: Bool, t: Float) {
     var t0 = Double(ray.tMin)
@@ -115,7 +123,7 @@ private func doubleSweptAABB(
     target: CajuAABB
 ) -> (hit: Bool, nearBoundary: Bool, t: Float) {
     if displacement == .zero {
-        let overlaps = moving.overlaps(target)
+        let overlaps = moving.intersects(target)
         let nearX =
             abs(Double(moving.min.x) - Double(target.max.x)) < 1e-4
             || abs(Double(moving.max.x) - Double(target.min.x)) < 1e-4
@@ -188,7 +196,7 @@ struct CajuPhysicsSpatialBVHTests {
         #expect(bvh.bounds == nil)
         #expect(bvh.validate())
 
-        let ray = try CajuRay(origin: SIMD3<Float>(0, 0, -5), direction: SIMD3<Float>(0, 0, 1))
+        let ray = try CajuRayQuery(origin: SIMD3<Float>(0, 0, -5), direction: SIMD3<Float>(0, 0, 1))
         #expect(bvh.raycastFirst(ray) == nil)
 
         var rayHits: [CajuBVHRayHit] = []
@@ -196,13 +204,13 @@ struct CajuPhysicsSpatialBVHTests {
         bvh.raycastAll(ray, into: &rayHits, stack: &stack)
         #expect(rayHits.isEmpty)
 
-        let queryBox = try CajuAABB(min: SIMD3<Float>(-1, -1, -1), max: SIMD3<Float>(1, 1, 1))
+        let queryBox = makeAABB(SIMD3<Float>(-1, -1, -1), SIMD3<Float>(1, 1, 1))
         var overlapHits: [CajuBVHProxy] = []
-        bvh.query(overlapping: queryBox, into: &overlapHits, stack: &stack)
+        try bvh.query(overlapping: queryBox, into: &overlapHits, stack: &stack)
         #expect(overlapHits.isEmpty)
 
         var sphereCount = 0
-        try bvh.shapecast(sphereCenter: .zero, radius: 5) { _, _ in
+        try bvh.shapecast(sphere: makeSphere(.zero, 5)) { _, _ in
             sphereCount += 1
             return true
         }
@@ -220,9 +228,82 @@ struct CajuPhysicsSpatialBVHTests {
         #expect(bvh.validate())
     }
 
+    @Test func bvhRejectsInvalidAABBsInAllAPIs() throws {
+        var bvh = try CajuBVH()
+        let valid = makeAABB(SIMD3<Float>(0, 0, 0), SIMD3<Float>(1, 1, 1))
+        let proxy = try bvh.insert(bounds: valid, userData: 1)
+
+        let nonFiniteBoxes = [
+            makeAABB(SIMD3<Float>(.nan, 0, 0), SIMD3<Float>(1, 1, 1)),
+            makeAABB(SIMD3<Float>(0, .infinity, 0), SIMD3<Float>(1, 1, 1)),
+            makeAABB(SIMD3<Float>(0, 0, 0), SIMD3<Float>(1, 1, -.infinity)),
+        ]
+        let invertedBoxes = [
+            makeAABB(SIMD3<Float>(2, 0, 0), SIMD3<Float>(1, 1, 1)),
+            makeAABB(SIMD3<Float>(0, 2, 0), SIMD3<Float>(1, 1, 1)),
+            makeAABB(SIMD3<Float>(0, 0, 2), SIMD3<Float>(1, 1, 1)),
+        ]
+
+        var stack = CajuBVHTraversalStack()
+        var results: [CajuBVHProxy] = []
+
+        for bad in nonFiniteBoxes {
+            #expect(throws: CajuSpatialError.nonFiniteBounds) {
+                _ = try bvh.insert(bounds: bad, userData: 2)
+            }
+            #expect(throws: CajuSpatialError.nonFiniteBounds) {
+                _ = try bvh.update(proxy, bounds: bad)
+            }
+            #expect(throws: CajuSpatialError.nonFiniteBounds) {
+                _ = try bvh.build(from: [(valid, 1), (bad, 2)])
+            }
+            #expect(throws: CajuSpatialError.nonFiniteBounds) {
+                try bvh.query(overlapping: bad) { _, _ in true }
+            }
+            #expect(throws: CajuSpatialError.nonFiniteBounds) {
+                try bvh.query(overlapping: bad, into: &results, stack: &stack)
+            }
+            #expect(throws: CajuSpatialError.nonFiniteBounds) {
+                try bvh.shapecast(swept: bad, displacement: SIMD3<Float>(1, 0, 0)) { _ in true }
+            }
+            #expect(throws: CajuSpatialError.nonFiniteBounds) {
+                try bvh.shapecast(swept: bad, displacement: .zero, stack: &stack) { _ in true }
+            }
+        }
+
+        for bad in invertedBoxes {
+            #expect(throws: CajuSpatialError.invalidBounds) {
+                _ = try bvh.insert(bounds: bad, userData: 2)
+            }
+            #expect(throws: CajuSpatialError.invalidBounds) {
+                _ = try bvh.update(proxy, bounds: bad)
+            }
+            #expect(throws: CajuSpatialError.invalidBounds) {
+                _ = try bvh.build(from: [(valid, 1), (bad, 2)])
+            }
+            #expect(throws: CajuSpatialError.invalidBounds) {
+                try bvh.query(overlapping: bad) { _, _ in true }
+            }
+            #expect(throws: CajuSpatialError.invalidBounds) {
+                try bvh.query(overlapping: bad, into: &results, stack: &stack)
+            }
+            #expect(throws: CajuSpatialError.invalidBounds) {
+                try bvh.shapecast(swept: bad, displacement: SIMD3<Float>(1, 0, 0)) { _ in true }
+            }
+            #expect(throws: CajuSpatialError.invalidBounds) {
+                try bvh.shapecast(swept: bad, displacement: .zero, stack: &stack) { _ in true }
+            }
+        }
+
+        // Falha de build não corrompe estado existente.
+        #expect(bvh.count == 1)
+        #expect(bvh.isValid(proxy))
+        #expect(bvh.validate())
+    }
+
     @Test func singleElementLifecycleUpdateRefitAndHandleReuse() throws {
         var bvh = try CajuBVH(fatMargin: 0.5, maxCapacity: 2)
-        let box0 = try CajuAABB(min: SIMD3<Float>(0, 0, 0), max: SIMD3<Float>(1, 1, 1))
+        let box0 = makeAABB(SIMD3<Float>(0, 0, 0), SIMD3<Float>(1, 1, 1))
         let p0 = try bvh.insert(bounds: box0, userData: 42)
         #expect(bvh.count == 1)
         #expect(!bvh.isEmpty)
@@ -232,14 +313,14 @@ struct CajuPhysicsSpatialBVHTests {
         #expect(try bvh.userData(for: p0) == 42)
 
         // Movimento dentro da AABB gorda (margem 0.5): não reinserir.
-        let smallMove = try CajuAABB(min: SIMD3<Float>(0.2, 0.1, 0), max: SIMD3<Float>(1.2, 1.1, 1))
+        let smallMove = makeAABB(SIMD3<Float>(0.2, 0.1, 0), SIMD3<Float>(1.2, 1.1, 1))
         let reinsertedSmall = try bvh.update(p0, bounds: smallMove)
         #expect(!reinsertedSmall)
         #expect(try bvh.bounds(for: p0) == smallMove)
         #expect(bvh.validate())
 
         // Movimento que escapa da AABB gorda: reinserir com deslocamento.
-        let farMove = try CajuAABB(min: SIMD3<Float>(10, 0, 0), max: SIMD3<Float>(11, 1, 1))
+        let farMove = makeAABB(SIMD3<Float>(10, 0, 0), SIMD3<Float>(11, 1, 1))
         let reinsertedFar = try bvh.update(
             p0,
             bounds: farMove,
@@ -329,13 +410,13 @@ struct CajuPhysicsSpatialBVHTests {
     @Test func identicalElementsAndDeepTreeStackOverflow() throws {
         // Muitos elementos idênticos (mesma AABB).
         var bvh = try CajuBVH(fatMargin: 0.05)
-        let sameBox = try CajuAABB(min: SIMD3<Float>(-1, -1, -1), max: SIMD3<Float>(1, 1, 1))
+        let sameBox = makeAABB(SIMD3<Float>(-1, -1, -1), SIMD3<Float>(1, 1, 1))
         let entries = (0..<80).map { (bounds: sameBox, userData: UInt32($0)) }
         let proxies = try bvh.build(from: entries)
         #expect(bvh.count == 80)
         #expect(bvh.validate())
 
-        let ray = try CajuRay(origin: SIMD3<Float>(0, 0, -5), direction: SIMD3<Float>(0, 0, 1))
+        let ray = try CajuRayQuery(origin: SIMD3<Float>(0, 0, -5), direction: SIMD3<Float>(0, 0, 1))
         #expect(bvh.raycastFirst(ray)?.t == 4)
         var hits: [CajuBVHRayHit] = []
         var stack = CajuBVHTraversalStack()
@@ -343,17 +424,17 @@ struct CajuPhysicsSpatialBVHTests {
         #expect(Set(hits.map(\.proxy)) == Set(proxies))
 
         var overlapSame: [CajuBVHProxy] = []
-        bvh.query(overlapping: sameBox, into: &overlapSame, stack: &stack)
+        try bvh.query(overlapping: sameBox, into: &overlapSame, stack: &stack)
         #expect(Set(overlapSame) == Set(proxies))
 
         var sphereSame = Set<CajuBVHProxy>()
-        try bvh.shapecast(sphereCenter: .zero, radius: 0.5, stack: &stack) { proxy, _ in
+        try bvh.shapecast(sphere: makeSphere(.zero, 0.5), stack: &stack) { proxy, _ in
             sphereSame.insert(proxy)
             return true
         }
         #expect(sphereSame == Set(proxies))
 
-        let sweptProbe = try CajuAABB(min: SIMD3<Float>(-0.5, -0.5, -4), max: SIMD3<Float>(0.5, 0.5, -3))
+        let sweptProbe = makeAABB(SIMD3<Float>(-0.5, -0.5, -4), SIMD3<Float>(0.5, 0.5, -3))
         var sweptSame = Set<CajuBVHProxy>()
         try bvh.shapecast(swept: sweptProbe, displacement: SIMD3<Float>(0, 0, 5), stack: &stack) { hit in
             sweptSame.insert(hit.proxy)
@@ -366,27 +447,27 @@ struct CajuPhysicsSpatialBVHTests {
         var deepProxies: [CajuBVHProxy] = []
         for i in 0..<150 {
             let x = Float(i) * 2.0
-            let box = try CajuAABB(min: SIMD3<Float>(x, 0, 0), max: SIMD3<Float>(x + 1, 1, 1))
+            let box = makeAABB(SIMD3<Float>(x, 0, 0), SIMD3<Float>(x + 1, 1, 1))
             deepProxies.append(try deepBVH.insert(bounds: box, userData: UInt32(i)))
         }
         #expect(deepBVH.validate())
 
-        let wideQuery = try CajuAABB(min: SIMD3<Float>(-1, -1, -1), max: SIMD3<Float>(400, 2, 2))
+        let wideQuery = makeAABB(SIMD3<Float>(-1, -1, -1), SIMD3<Float>(400, 2, 2))
         var visited: [CajuBVHProxy] = []
-        deepBVH.query(overlapping: wideQuery, into: &visited, stack: &stack)
+        try deepBVH.query(overlapping: wideQuery, into: &visited, stack: &stack)
         #expect(Set(visited) == Set(deepProxies))
 
         // Reuso da pilha após overflow deve funcionar normalmente.
-        let singleQuery = try CajuAABB(min: SIMD3<Float>(19.5, 0, 0), max: SIMD3<Float>(21.5, 1, 1))
+        let singleQuery = makeAABB(SIMD3<Float>(19.5, 0, 0), SIMD3<Float>(21.5, 1, 1))
         visited.removeAll(keepingCapacity: true)
-        deepBVH.query(overlapping: singleQuery, into: &visited, stack: &stack)
+        try deepBVH.query(overlapping: singleQuery, into: &visited, stack: &stack)
         #expect(Set(visited) == [deepProxies[10]])
     }
 
     @Test func queryErrorsEarlyStopAndAnalyticalShapecasts() throws {
         var bvh = try CajuBVH(fatMargin: 0.1)
-        let b0 = try CajuAABB(min: SIMD3<Float>(0, 0, 0), max: SIMD3<Float>(2, 2, 2))
-        let b1 = try CajuAABB(min: SIMD3<Float>(4, 0, 0), max: SIMD3<Float>(6, 2, 2))
+        let b0 = makeAABB(SIMD3<Float>(0, 0, 0), SIMD3<Float>(2, 2, 2))
+        let b1 = makeAABB(SIMD3<Float>(4, 0, 0), SIMD3<Float>(6, 2, 2))
         let p0 = try bvh.insert(bounds: b0, userData: 1)
         let p1 = try bvh.insert(bounds: b1, userData: 2)
 
@@ -395,20 +476,20 @@ struct CajuPhysicsSpatialBVHTests {
             _ = try bvh.update(p0, bounds: b0, displacement: SIMD3<Float>(.nan, 0, 0))
         }
         #expect(throws: CajuSpatialError.nonFiniteInput) {
-            try bvh.shapecast(sphereCenter: SIMD3<Float>(.infinity, 0, 0), radius: 1) { _, _ in true }
+            try bvh.shapecast(sphere: makeSphere(SIMD3<Float>(.infinity, 0, 0), 1)) { _, _ in true }
         }
         #expect(throws: CajuSpatialError.nonFiniteInput) {
-            try bvh.shapecast(sphereCenter: .zero, radius: .nan) { _, _ in true }
+            try bvh.shapecast(sphere: makeSphere(.zero, .nan)) { _, _ in true }
         }
         #expect(throws: CajuSpatialError.invalidRadius) {
-            try bvh.shapecast(sphereCenter: .zero, radius: -0.001) { _, _ in true }
+            try bvh.shapecast(sphere: makeSphere(.zero, -0.001)) { _, _ in true }
         }
         #expect(throws: CajuSpatialError.nonFiniteInput) {
             try bvh.shapecast(swept: b0, displacement: SIMD3<Float>(0, -.infinity, 0)) { _ in true }
         }
 
         // Visitor interrompendo cedo (retornando false).
-        let ray = try CajuRay(origin: SIMD3<Float>(-2, 1, 1), direction: SIMD3<Float>(1, 0, 0))
+        let ray = try CajuRayQuery(origin: SIMD3<Float>(-2, 1, 1), direction: SIMD3<Float>(1, 0, 0))
         var rayVisited = 0
         bvh.raycastAll(ray) { _ in
             rayVisited += 1
@@ -416,23 +497,23 @@ struct CajuPhysicsSpatialBVHTests {
         }
         #expect(rayVisited == 1)
 
-        let bigBox = try CajuAABB(min: SIMD3<Float>(-1, -1, -1), max: SIMD3<Float>(10, 10, 10))
+        let bigBox = makeAABB(SIMD3<Float>(-1, -1, -1), SIMD3<Float>(10, 10, 10))
         var overlapVisited = 0
-        bvh.query(overlapping: bigBox) { _, _ in
+        try bvh.query(overlapping: bigBox) { _, _ in
             overlapVisited += 1
             return false
         }
         #expect(overlapVisited == 1)
 
         var sphereVisited = 0
-        try bvh.shapecast(sphereCenter: SIMD3<Float>(3, 1, 1), radius: 5) { _, _ in
+        try bvh.shapecast(sphere: makeSphere(SIMD3<Float>(3, 1, 1), 5)) { _, _ in
             sphereVisited += 1
             return false
         }
         #expect(sphereVisited == 1)
 
         var sweptVisited = 0
-        let mover = try CajuAABB(min: SIMD3<Float>(-2, 0.5, 0.5), max: SIMD3<Float>(-1, 1.5, 1.5))
+        let mover = makeAABB(SIMD3<Float>(-2, 0.5, 0.5), SIMD3<Float>(-1, 1.5, 1.5))
         try bvh.shapecast(swept: mover, displacement: SIMD3<Float>(10, 0, 0)) { _ in
             sweptVisited += 1
             return false
@@ -442,7 +523,7 @@ struct CajuPhysicsSpatialBVHTests {
         // Casos analíticos de esfera e swept AABB.
         var sphereHits: [CajuBVHProxy] = []
         // Esfera tocando exatamente a face x = 2 de b0 (centro (3, 1, 1), raio 1) e x = 4 de b1.
-        try bvh.shapecast(sphereCenter: SIMD3<Float>(3, 1, 1), radius: 1) { proxy, _ in
+        try bvh.shapecast(sphere: makeSphere(SIMD3<Float>(3, 1, 1), 1)) { proxy, _ in
             sphereHits.append(proxy)
             return true
         }
@@ -450,14 +531,14 @@ struct CajuPhysicsSpatialBVHTests {
 
         // Esfera raio 0 dentro de b0 vs fora.
         sphereHits.removeAll()
-        try bvh.shapecast(sphereCenter: SIMD3<Float>(1, 1, 1), radius: 0) { proxy, _ in
+        try bvh.shapecast(sphere: makeSphere(SIMD3<Float>(1, 1, 1), 0)) { proxy, _ in
             sphereHits.append(proxy)
             return true
         }
         #expect(sphereHits == [p0])
 
         sphereHits.removeAll()
-        try bvh.shapecast(sphereCenter: SIMD3<Float>(2.01, 1, 1), radius: 0) { proxy, _ in
+        try bvh.shapecast(sphere: makeSphere(SIMD3<Float>(2.01, 1, 1), 0)) { proxy, _ in
             sphereHits.append(proxy)
             return true
         }
@@ -486,8 +567,10 @@ struct CajuPhysicsSpatialBVHTests {
         #expect(closeRelative(onlySwept.t, 0.25))
 
         // Swept com deslocamento zero quando já sobrepõe b0.
-        let overlappingMover = try CajuAABB(
-            min: SIMD3<Float>(0.5, 0.5, 0.5), max: SIMD3<Float>(1.5, 1.5, 1.5))
+        let overlappingMover = makeAABB(
+            SIMD3<Float>(0.5, 0.5, 0.5),
+            SIMD3<Float>(1.5, 1.5, 1.5)
+        )
         sweptHits.removeAll()
         try bvh.shapecast(swept: overlappingMover, displacement: .zero) { hit in
             sweptHits.append(hit)
@@ -500,12 +583,12 @@ struct CajuPhysicsSpatialBVHTests {
 
     @Test func singleElementZeroVolumeAndInsideOriginQueries() throws {
         var bvh = try CajuBVH(fatMargin: 0.1)
-        let pointBox = try CajuAABB(min: SIMD3<Float>(2, 3, 4), max: SIMD3<Float>(2, 3, 4))
+        let pointBox = makeAABB(SIMD3<Float>(2, 3, 4), SIMD3<Float>(2, 3, 4))
         let pPoint = try bvh.insert(bounds: pointBox, userData: 11)
         #expect(bvh.validate())
 
         // 1 elemento (volume zero): todas as consultas e sobrecargas sem pilha.
-        let toPoint = try CajuRay(origin: SIMD3<Float>(0, 3, 4), direction: SIMD3<Float>(1, 0, 0))
+        let toPoint = try CajuRayQuery(origin: SIMD3<Float>(0, 3, 4), direction: SIMD3<Float>(1, 0, 0))
         let firstPoint = try #require(bvh.raycastFirst(toPoint))
         #expect(firstPoint.proxy == pPoint)
         #expect(firstPoint.userData == 11)
@@ -519,20 +602,20 @@ struct CajuPhysicsSpatialBVHTests {
         #expect(allPoint == [pPoint])
 
         var overlapPoint: [CajuBVHProxy] = []
-        bvh.query(overlapping: pointBox) { proxy, _ in
+        try bvh.query(overlapping: pointBox) { proxy, _ in
             overlapPoint.append(proxy)
             return true
         }
         #expect(overlapPoint == [pPoint])
 
         var spherePoint: [CajuBVHProxy] = []
-        try bvh.shapecast(sphereCenter: SIMD3<Float>(2, 3, 5), radius: 1) { proxy, _ in
+        try bvh.shapecast(sphere: makeSphere(SIMD3<Float>(2, 3, 5), 1)) { proxy, _ in
             spherePoint.append(proxy)
             return true
         }
         #expect(spherePoint == [pPoint])
 
-        let mover = try CajuAABB(min: SIMD3<Float>(-1, 2.5, 3.5), max: SIMD3<Float>(0, 3.5, 4.5))
+        let mover = makeAABB(SIMD3<Float>(-1, 2.5, 3.5), SIMD3<Float>(0, 3.5, 4.5))
         var sweptPoint: [CajuBVHSweptHit] = []
         try bvh.shapecast(swept: mover, displacement: SIMD3<Float>(4, 0, 0)) { hit in
             sweptPoint.append(hit)
@@ -544,12 +627,12 @@ struct CajuPhysicsSpatialBVHTests {
 
         // Plano de volume zero + origem de raio dentro de uma AABB.
         bvh.clear()
-        let flatBox = try CajuAABB(min: SIMD3<Float>(0, 0, 5), max: SIMD3<Float>(4, 4, 5))
-        let solidBox = try CajuAABB(min: SIMD3<Float>(-2, -2, -2), max: SIMD3<Float>(2, 2, 2))
+        let flatBox = makeAABB(SIMD3<Float>(0, 0, 5), SIMD3<Float>(4, 4, 5))
+        let solidBox = makeAABB(SIMD3<Float>(-2, -2, -2), SIMD3<Float>(2, 2, 2))
         let pFlat = try bvh.insert(bounds: flatBox, userData: 1)
         let pSolid = try bvh.insert(bounds: solidBox, userData: 2)
 
-        let insideRay = try CajuRay(origin: SIMD3<Float>(1, 1, 0), direction: SIMD3<Float>(0, 0, 1))
+        let insideRay = try CajuRayQuery(origin: SIMD3<Float>(1, 1, 0), direction: SIMD3<Float>(0, 0, 1))
         let insideFirst = try #require(bvh.raycastFirst(insideRay))
         #expect(insideFirst.proxy == pSolid)
         #expect(insideFirst.t == 0)
@@ -571,7 +654,7 @@ struct CajuPhysicsSpatialBVHTests {
                 var input: [(bounds: CajuAABB, userData: UInt32)] = []
                 input.reserveCapacity(count)
                 for idx in 0..<count {
-                    input.append((try randomBox(&rng), UInt32(idx)))
+                    input.append((randomBox(&rng), UInt32(idx)))
                 }
                 let handles = try bvh.build(from: input)
                 #expect(bvh.validate())
@@ -628,12 +711,12 @@ struct CajuPhysicsSpatialBVHTests {
             }
 
             // 2. Overlap AABB vs força bruta (comparação exata).
-            let queryBox = try randomBox(&rng, range: -30...30)
+            let queryBox = randomBox(&rng, range: -30...30)
             let expectedOverlap = Set(
-                entries.compactMap { $0.bounds.overlaps(queryBox) ? $0.proxy : nil }
+                entries.compactMap { $0.bounds.intersects(queryBox) ? $0.proxy : nil }
             )
             var actualOverlap: [CajuBVHProxy] = []
-            bvh.query(overlapping: queryBox, into: &actualOverlap, stack: &stack)
+            try bvh.query(overlapping: queryBox, into: &actualOverlap, stack: &stack)
             #expect(Set(actualOverlap) == expectedOverlap)
 
             // 3. Shapecast esfera vs força bruta em Double.
@@ -657,7 +740,7 @@ struct CajuPhysicsSpatialBVHTests {
             }
             if !nearSphereBoundary {
                 var actualSphere = Set<CajuBVHProxy>()
-                try bvh.shapecast(sphereCenter: center, radius: radius, stack: &stack) { proxy, _ in
+                try bvh.shapecast(sphere: makeSphere(center, radius), stack: &stack) { proxy, _ in
                     actualSphere.insert(proxy)
                     return true
                 }
@@ -665,7 +748,7 @@ struct CajuPhysicsSpatialBVHTests {
             }
 
             // 4. Shapecast swept AABB vs força bruta em Double.
-            let mover = try randomBox(&rng, range: -15...15)
+            let mover = randomBox(&rng, range: -15...15)
             let disp =
                 rng.nextUInt32() % 10 == 0
                 ? SIMD3<Float>.zero
@@ -712,7 +795,7 @@ struct CajuPhysicsSpatialBVHTests {
         try CajuFuzz.run(seed: 0xD41A_0002, iterations: fuzzIterations) { rng, step in
             let op = rng.nextUInt32() % 100
             if activeList.isEmpty || (op < 35 && activeList.count < 48) {
-                let box = try randomBox(&rng, range: -20...20)
+                let box = randomBox(&rng, range: -20...20)
                 let tag = nextTag
                 nextTag &+= 1
                 let proxy = try bvh.insert(bounds: box, userData: tag)
@@ -743,7 +826,7 @@ struct CajuPhysicsSpatialBVHTests {
                         rng.nextFloat(in: -0.05...0.05),
                         rng.nextFloat(in: -0.05...0.05)
                     )
-                let moved = try CajuAABB(min: old.bounds.min + delta, max: old.bounds.max + delta)
+                let moved = makeAABB(old.bounds.min.storage + delta, old.bounds.max.storage + delta)
                 _ = try bvh.update(proxy, bounds: moved, displacement: delta)
                 mirror[proxy] = (moved, old.userData)
             } else if op < 99 {
@@ -799,12 +882,12 @@ struct CajuPhysicsSpatialBVHTests {
                 }
             }
 
-            let qBox = try randomBox(&rng, range: -25...25)
+            let qBox = randomBox(&rng, range: -25...25)
             let expectedOverlap = Set(
-                mirror.compactMap { $0.value.bounds.overlaps(qBox) ? $0.key : nil }
+                mirror.compactMap { $0.value.bounds.intersects(qBox) ? $0.key : nil }
             )
             var actualOverlap: [CajuBVHProxy] = []
-            bvh.query(overlapping: qBox, into: &actualOverlap, stack: &stack)
+            try bvh.query(overlapping: qBox, into: &actualOverlap, stack: &stack)
             #expect(Set(actualOverlap) == expectedOverlap)
 
             let center = SIMD3<Float>(
@@ -831,14 +914,14 @@ struct CajuPhysicsSpatialBVHTests {
             }
             if !nearSphereBoundary {
                 var actualSphere = Set<CajuBVHProxy>()
-                try bvh.shapecast(sphereCenter: center, radius: radius, stack: &stack) { proxy, _ in
+                try bvh.shapecast(sphere: makeSphere(center, radius), stack: &stack) { proxy, _ in
                     actualSphere.insert(proxy)
                     return true
                 }
                 #expect(actualSphere == expectedSphere)
             }
 
-            let mover = try randomBox(&rng, range: -15...15)
+            let mover = randomBox(&rng, range: -15...15)
             let disp =
                 rng.nextUInt32() % 10 == 0
                 ? SIMD3<Float>.zero

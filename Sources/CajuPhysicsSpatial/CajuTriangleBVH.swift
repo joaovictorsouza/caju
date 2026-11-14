@@ -30,7 +30,7 @@ public struct CajuTriangleBVHHit: Sendable, Equatable {
 /// ```swift
 /// let positions = [CajuVec3(0, 0, 0), CajuVec3(1, 0, 0), CajuVec3(0, 1, 0)]
 /// let bvh = try CajuTriangleBVH(positions: positions, indices: [0, 1, 2])
-/// let ray = try CajuRay(origin: SIMD3(0.2, 0.2, -1), direction: SIMD3(0, 0, 1))
+/// let ray = try CajuRayQuery(origin: SIMD3(0.2, 0.2, -1), direction: SIMD3(0, 0, 1))
 /// let hit = bvh.raycastFirst(ray)
 /// ```
 public struct CajuTriangleBVH: Sendable {
@@ -61,7 +61,7 @@ public struct CajuTriangleBVH: Sendable {
         var occupied: Bool = false
 
         init() {
-            bounds = CajuAABB(uncheckedMin: .zero, max: .zero)
+            bounds = CajuAABB(min: .zero, max: .zero)
         }
     }
 
@@ -209,9 +209,9 @@ public struct CajuTriangleBVH: Sendable {
                 Swift.max(v0.y, Swift.max(v1.y, v2.y)),
                 Swift.max(v0.z, Swift.max(v1.z, v2.z))
             )
-            let b = CajuAABB(uncheckedMin: minP, max: maxP)
+            let b = CajuAABB(min: CajuVec3(storage: minP), max: CajuVec3(storage: maxP))
             triBounds.append(b)
-            triCentroids.append(b.center)
+            triCentroids.append(aabbCenter(b))
             order.append(UInt32(t))
         }
 
@@ -220,7 +220,7 @@ public struct CajuTriangleBVH: Sendable {
 
         var bins = [SAHBin](repeating: SAHBin(), count: Self.sahBinCount)
         var leftBounds = [CajuAABB](
-            repeating: CajuAABB(uncheckedMin: .zero, max: .zero),
+            repeating: CajuAABB(min: .zero, max: .zero),
             count: Self.sahBinCount - 1
         )
         var leftCounts = [Int](repeating: 0, count: Self.sahBinCount - 1)
@@ -265,7 +265,7 @@ public struct CajuTriangleBVH: Sendable {
     /// Variante recomendada para o caminho quente: reutiliza `stack` sem alocações de *heap* após aquecida.
     @inlinable
     public func raycastFirst(
-        _ ray: CajuRay,
+        _ ray: CajuRayQuery,
         twoSided: Bool = true,
         stack: inout CajuBVHTraversalStack
     ) -> CajuTriangleBVHHit? {
@@ -356,7 +356,7 @@ public struct CajuTriangleBVH: Sendable {
     ///   se a profundidade ultrapassar 64 níveis). No caminho quente, use
     ///   ``raycastFirst(_:twoSided:stack:)``.
     @inlinable
-    public func raycastFirst(_ ray: CajuRay, twoSided: Bool = true) -> CajuTriangleBVHHit? {
+    public func raycastFirst(_ ray: CajuRayQuery, twoSided: Bool = true) -> CajuTriangleBVHHit? {
         var stack = CajuBVHTraversalStack()
         return raycastFirst(ray, twoSided: twoSided, stack: &stack)
     }
@@ -366,7 +366,7 @@ public struct CajuTriangleBVH: Sendable {
     /// Variante recomendada para o caminho quente: reutiliza `stack` sem alocações de *heap* após aquecida.
     @inlinable
     public func raycastAll(
-        _ ray: CajuRay,
+        _ ray: CajuRayQuery,
         twoSided: Bool = true,
         stack: inout CajuBVHTraversalStack,
         visitor: (CajuTriangleBVHHit) -> Bool
@@ -434,7 +434,7 @@ public struct CajuTriangleBVH: Sendable {
     ///   ``raycastAll(_:twoSided:stack:visitor:)``.
     @inlinable
     public func raycastAll(
-        _ ray: CajuRay,
+        _ ray: CajuRayQuery,
         twoSided: Bool = true,
         visitor: (CajuTriangleBVHHit) -> Bool
     ) {
@@ -448,7 +448,7 @@ public struct CajuTriangleBVH: Sendable {
     /// sem alocações por consulta.
     @inlinable
     public func raycastAll(
-        _ ray: CajuRay,
+        _ ray: CajuRayQuery,
         twoSided: Bool = true,
         into results: inout [CajuTriangleBVHHit],
         stack: inout CajuBVHTraversalStack
@@ -462,16 +462,20 @@ public struct CajuTriangleBVH: Sendable {
     /// Visita todos os índices de triângulos que sobrepõem exatamente `aabb` (via SAT).
     ///
     /// Variante recomendada para o caminho quente: reutiliza `stack` sem alocações de *heap* após aquecida.
+    ///
+    /// - Throws: `CajuSpatialError.nonFiniteBounds` ou `.invalidBounds` se `aabb` for inválida.
     @inlinable
     public func query(
         overlapping aabb: CajuAABB,
         stack: inout CajuBVHTraversalStack,
         visitor: (UInt32) -> Bool
-    ) {
+    ) throws(CajuSpatialError) {
+        try validateAABB(aabb)
+
         stack.reset()
         defer { stack.reset() }
         guard !nodes.isEmpty else { return }
-        guard nodes[0].bounds.overlaps(aabb) else { return }
+        guard nodes[0].bounds.intersects(aabb) else { return }
 
         stack.push(0)
         while let (nodeIdx, _) = stack.pop() {
@@ -489,10 +493,10 @@ public struct CajuTriangleBVH: Sendable {
             } else {
                 let left = node.leftOrFirstPrim
                 let right = node.right
-                if nodes[Int(left)].bounds.overlaps(aabb) {
+                if nodes[Int(left)].bounds.intersects(aabb) {
                     stack.push(left)
                 }
-                if nodes[Int(right)].bounds.overlaps(aabb) {
+                if nodes[Int(right)].bounds.intersects(aabb) {
                     stack.push(right)
                 }
             }
@@ -504,36 +508,36 @@ public struct CajuTriangleBVH: Sendable {
     /// - Important: Aloca uma `CajuBVHTraversalStack` local a cada chamada (alocando em *heap*
     ///   se a profundidade ultrapassar 64 níveis). No caminho quente, use
     ///   ``query(overlapping:stack:visitor:)``.
+    /// - Throws: `CajuSpatialError.nonFiniteBounds` ou `.invalidBounds` se `aabb` for inválida.
     @inlinable
-    public func query(overlapping aabb: CajuAABB, visitor: (UInt32) -> Bool) {
+    public func query(
+        overlapping aabb: CajuAABB,
+        visitor: (UInt32) -> Bool
+    ) throws(CajuSpatialError) {
         var stack = CajuBVHTraversalStack()
-        query(overlapping: aabb, stack: &stack, visitor: visitor)
+        try query(overlapping: aabb, stack: &stack, visitor: visitor)
     }
 
-    /// Visita todos os índices de triângulos que sobrepõem a esfera `(center, radius)`.
+    /// Visita todos os índices de triângulos que sobrepõem a esfera `sphere`.
     ///
     /// Variante recomendada para o caminho quente: reutiliza `stack` sem alocações de *heap* após aquecida.
     ///
     /// - Throws: `CajuSpatialError.nonFiniteInput` ou `CajuSpatialError.invalidRadius`.
     @inlinable
     public func query(
-        overlappingSphereCenter center: SIMD3<Float>,
-        radius: Float,
+        overlapping sphere: CajuSphere,
         stack: inout CajuBVHTraversalStack,
         visitor: (UInt32) -> Bool
     ) throws(CajuSpatialError) {
-        guard allFinite(center), radius.isFinite else {
-            throw .nonFiniteInput
-        }
-        guard radius >= 0 else {
-            throw .invalidRadius
-        }
+        try validateSphere(sphere)
+        let center = sphere.center.storage
+        let radius = sphere.radius
 
         stack.reset()
         defer { stack.reset() }
         guard !nodes.isEmpty else { return }
         let cullRadius = clampToFinite(radius * (1.0 + Self.aabbTraversalSlack) + Self.aabbTraversalSlack)
-        guard nodes[0].bounds.overlapsSphere(center: center, radius: cullRadius) else { return }
+        guard aabbOverlapsSphere(nodes[0].bounds, center: center, radius: cullRadius) else { return }
 
         stack.push(0)
         while let (nodeIdx, _) = stack.pop() {
@@ -544,36 +548,35 @@ public struct CajuTriangleBVH: Sendable {
                 for p in first..<end {
                     let triIdx = primOrder[p]
                     let tri = uncheckedTriangle(at: Int(triIdx))
-                    if tri.overlapsSphere(center: center, radius: radius) {
+                    if tri.overlaps(sphere) {
                         if !visitor(triIdx) { return }
                     }
                 }
             } else {
                 let left = node.leftOrFirstPrim
                 let right = node.right
-                if nodes[Int(left)].bounds.overlapsSphere(center: center, radius: cullRadius) {
+                if aabbOverlapsSphere(nodes[Int(left)].bounds, center: center, radius: cullRadius) {
                     stack.push(left)
                 }
-                if nodes[Int(right)].bounds.overlapsSphere(center: center, radius: cullRadius) {
+                if aabbOverlapsSphere(nodes[Int(right)].bounds, center: center, radius: cullRadius) {
                     stack.push(right)
                 }
             }
         }
     }
 
-    /// Conveniência de `query(overlappingSphereCenter:radius:)` sem pilha explícita.
+    /// Conveniência de `query(overlapping:)` por esfera sem pilha explícita.
     ///
     /// - Important: Aloca uma `CajuBVHTraversalStack` local a cada chamada (alocando em *heap*
     ///   se a profundidade ultrapassar 64 níveis). No caminho quente, use
-    ///   ``query(overlappingSphereCenter:radius:stack:visitor:)``.
+    ///   ``query(overlapping:stack:visitor:)``.
     @inlinable
     public func query(
-        overlappingSphereCenter center: SIMD3<Float>,
-        radius: Float,
+        overlapping sphere: CajuSphere,
         visitor: (UInt32) -> Bool
     ) throws(CajuSpatialError) {
         var stack = CajuBVHTraversalStack()
-        try query(overlappingSphereCenter: center, radius: radius, stack: &stack, visitor: visitor)
+        try query(overlapping: sphere, stack: &stack, visitor: visitor)
     }
 
     /// Verifica invariantes estruturais da BVH de triângulos (bounds pai/filho, folhas e partição completa).
@@ -603,9 +606,9 @@ public struct CajuTriangleBVH: Sendable {
                     let triIdx = Int(primOrder[p])
                     if triIdx < 0 || triIdx >= triangleCount { return false }
                     let tri = uncheckedTriangle(at: triIdx)
-                    if !node.bounds.contains(tri.v0)
-                        || !node.bounds.contains(tri.v1)
-                        || !node.bounds.contains(tri.v2)
+                    if !node.bounds.contains(CajuVec3(storage: tri.v0))
+                        || !node.bounds.contains(CajuVec3(storage: tri.v1))
+                        || !node.bounds.contains(CajuVec3(storage: tri.v2))
                     {
                         return false
                     }
@@ -617,7 +620,9 @@ public struct CajuTriangleBVH: Sendable {
                 if l < 0 || l >= nodes.count || r < 0 || r >= nodes.count || l == r { return false }
                 let expected = nodes[l].bounds.union(nodes[r].bounds)
                 if node.bounds != expected { return false }
-                if !node.bounds.contains(nodes[l].bounds) || !node.bounds.contains(nodes[r].bounds) {
+                if !aabbContains(node.bounds, nodes[l].bounds)
+                    || !aabbContains(node.bounds, nodes[r].bounds)
+                {
                     return false
                 }
                 stack.push(node.leftOrFirstPrim)
@@ -708,9 +713,10 @@ public struct CajuTriangleBVH: Sendable {
                 bins[b].count += 1
             }
 
+            // Varredura prefixa (esquerda -> direita)
             var accCount = 0
             var accOccupied = false
-            var accBounds = CajuAABB(uncheckedMin: .zero, max: .zero)
+            var accBounds = CajuAABB(min: .zero, max: .zero)
             for i in 0..<(sahBinCount - 1) {
                 if bins[i].occupied {
                     accBounds = accOccupied ? accBounds.union(bins[i].bounds) : bins[i].bounds
@@ -723,7 +729,7 @@ public struct CajuTriangleBVH: Sendable {
 
             var rightCount = 0
             var rightOccupied = false
-            var rightBounds = CajuAABB(uncheckedMin: .zero, max: .zero)
+            var rightBounds = CajuAABB(min: .zero, max: .zero)
             for i in stride(from: sahBinCount - 1, through: 1, by: -1) {
                 if bins[i].occupied {
                     rightBounds = rightOccupied ? rightBounds.union(bins[i].bounds) : bins[i].bounds
@@ -733,8 +739,8 @@ public struct CajuTriangleBVH: Sendable {
                 let leftCount = leftCounts[i - 1]
                 if leftCount > 0 && rightCount > 0 {
                     let cost =
-                        Float(leftCount) * leftBounds[i - 1].surfaceArea
-                        + Float(rightCount) * rightBounds.surfaceArea
+                        Float(leftCount) * aabbSurfaceArea(leftBounds[i - 1])
+                        + Float(rightCount) * aabbSurfaceArea(rightBounds)
                     if cost < bestCost {
                         bestCost = cost
                         bestAxis = axis

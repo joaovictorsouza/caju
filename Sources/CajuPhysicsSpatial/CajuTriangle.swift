@@ -1,33 +1,12 @@
 import CajuMath
 
-/// Resultado da interseção raio-triângulo (algoritmo de Möller–Trumbore).
-///
-/// As coordenadas baricêntricas correspondentes aos vértices `(v0, v1, v2)` são
-/// `(1 - u - v, u, v)`, com `u >= 0`, `v >= 0` e `u + v <= 1`.
-public struct CajuTriangleHit: Sendable, Equatable {
-    /// Parâmetro `t` ao longo do raio no ponto de interseção (`ray.origin + t * ray.direction`).
-    public let t: Float
-    /// Coordenada baricêntrica associada a `v1 - v0`.
-    public let u: Float
-    /// Coordenada baricêntrica associada a `v2 - v0`.
-    public let v: Float
-
-    /// Cria um resultado de interseção raio-triângulo.
-    @inlinable
-    public init(t: Float, u: Float, v: Float) {
-        self.t = t
-        self.u = u
-        self.v = v
-    }
-}
-
 /// Triângulo no espaço 3D definido por três vértices (`v0`, `v1`, `v2`).
 ///
 /// Triângulos degenerados (área zero) nunca geram hit em `intersect(ray:)`.
 ///
 /// ```swift
 /// let tri = CajuTriangle(SIMD3(0, 0, 0), SIMD3(1, 0, 0), SIMD3(0, 1, 0))
-/// let ray = try CajuRay(origin: SIMD3(0.2, 0.2, -1), direction: SIMD3(0, 0, 1))
+/// let ray = try CajuRayQuery(origin: SIMD3(0.2, 0.2, -1), direction: SIMD3(0, 0, 1))
 /// let hit = tri.intersect(ray: ray)
 /// ```
 public struct CajuTriangle: Sendable, Equatable, Hashable {
@@ -75,7 +54,7 @@ public struct CajuTriangle: Sendable, Equatable, Hashable {
             Swift.max(v0.y, Swift.max(v1.y, v2.y)),
             Swift.max(v0.z, Swift.max(v1.z, v2.z))
         )
-        return CajuAABB(uncheckedMin: minP, max: maxP)
+        return CajuAABB(min: CajuVec3(storage: minP), max: CajuVec3(storage: maxP))
     }
 
     /// Interseção raio-triângulo pelo método de Möller–Trumbore.
@@ -83,17 +62,17 @@ public struct CajuTriangle: Sendable, Equatable, Hashable {
     /// Triângulos degenerados (área zero ou vértices colineares/não finitos) retornam `nil`.
     ///
     /// - Parameters:
-    ///   - ray: Raio validado.
+    ///   - ray: Consulta de raio validada.
     ///   - twoSided: Quando `true` (padrão), aceita interseção pelos dois lados do triângulo;
     ///     quando `false`, descarta faces voltadas para fora do raio (*backface culling*).
     ///   - tMaxLimit: Teto opcional para `t` (limitado por `ray.tMax`).
-    /// - Returns: `CajuTriangleHit(t:u:v:)` ou `nil` se não houver interseção.
+    /// - Returns: `CajuRayTriangleHit(t:u:v:)` ou `nil` se não houver interseção.
     @inlinable
     public func intersect(
-        ray: CajuRay,
+        ray: CajuRayQuery,
         twoSided: Bool = true,
         tMaxLimit: Float? = nil
-    ) -> CajuTriangleHit? {
+    ) -> CajuRayTriangleHit? {
         guard allFinite(v0), allFinite(v1), allFinite(v2) else {
             return nil
         }
@@ -141,13 +120,13 @@ public struct CajuTriangle: Sendable, Equatable, Hashable {
         let t = simdDot(edge2, qvec) * invDet
         guard t >= ray.tMin, t <= limit else { return nil }
 
-        return CajuTriangleHit(t: t, u: u, v: v)
+        return CajuRayTriangleHit(t: t, u: u, v: v)
     }
 
     /// Testa sobreposição exata entre este triângulo e `aabb` (Teorema do Eixo Separador / 13 eixos).
     @inlinable
     public func overlaps(_ aabb: CajuAABB) -> Bool {
-        guard allFinite(v0), allFinite(v1), allFinite(v2) else {
+        guard allFinite(v0), allFinite(v1), allFinite(v2), isValidAABB(aabb) else {
             return false
         }
         // 3 eixos normais às faces da AABB (teste direto sem erro de translação).
@@ -163,8 +142,8 @@ public struct CajuTriangle: Sendable, Equatable, Hashable {
         let triMaxZ = Swift.max(v0.z, Swift.max(v1.z, v2.z))
         if triMinZ > aabb.max.z || triMaxZ < aabb.min.z { return false }
 
-        let c = aabb.center
-        let e = aabb.extents * 0.5
+        let c = aabbCenter(aabb)
+        let e = aabbHalfExtents(aabb)
         let a = v0 - c
         let b = v1 - c
         let d = v2 - c
@@ -311,14 +290,16 @@ public struct CajuTriangle: Sendable, Equatable, Hashable {
         return a + ab * t
     }
 
-    /// Testa sobreposição exata entre este triângulo e uma esfera `(center, radius)`.
+    /// Testa sobreposição exata entre este triângulo e uma esfera `CajuSphere`.
     @inlinable
-    public func overlapsSphere(center: SIMD3<Float>, radius: Float) -> Bool {
+    public func overlaps(_ sphere: CajuSphere) -> Bool {
         guard allFinite(v0), allFinite(v1), allFinite(v2),
-            allFinite(center), radius.isFinite, radius >= 0
+            sphere.isFinite, sphere.radius >= 0
         else {
             return false
         }
+        let center = sphere.center.storage
+        let radius = sphere.radius
         let closest = closestPoint(to: center)
         let diff = closest - center
         let distSq = simdLengthSquared(diff)

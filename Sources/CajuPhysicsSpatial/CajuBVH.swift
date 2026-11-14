@@ -61,8 +61,8 @@ public struct CajuBVHSweptHit: Sendable, Equatable {
 ///
 /// ```swift
 /// var bvh = try CajuBVH()
-/// let proxy = try bvh.insert(bounds: CajuAABB(min: SIMD3(0, 0, 0), max: SIMD3(1, 1, 1)), userData: 7)
-/// let ray = try CajuRay(origin: SIMD3(0.5, 0.5, -5), direction: SIMD3(0, 0, 1))
+/// let proxy = try bvh.insert(bounds: CajuAABB(min: CajuVec3(0, 0, 0), max: CajuVec3(1, 1, 1)), userData: 7)
+/// let ray = try CajuRayQuery(ray: CajuRay(origin: CajuVec3(0.5, 0.5, -5), direction: CajuVec3(0, 0, 1)))
 /// let hit = bvh.raycastFirst(ray)
 /// ```
 public struct CajuBVH: Sendable {
@@ -104,7 +104,7 @@ public struct CajuBVH: Sendable {
         var occupied: Bool = false
 
         init() {
-            bounds = CajuAABB(uncheckedMin: .zero, max: .zero)
+            bounds = CajuAABB(min: .zero, max: .zero)
         }
     }
 
@@ -160,12 +160,16 @@ public struct CajuBVH: Sendable {
     ///
     /// - Parameter entries: Lista de pares `(bounds, userData)`.
     /// - Returns: Array de handles estáveis na mesma ordem de `entries`.
-    /// - Throws: `CajuSpatialError.capacityExceeded` se `entries.count > maxCapacity`.
+    /// - Throws: `CajuSpatialError.capacityExceeded` se `entries.count > maxCapacity`;
+    ///   `CajuSpatialError.nonFiniteBounds` ou `.invalidBounds` se alguma AABB for inválida.
     public mutating func build(
         from entries: [(bounds: CajuAABB, userData: UInt32)]
     ) throws(CajuSpatialError) -> [CajuBVHProxy] {
         guard entries.count <= maxCapacity else {
             throw .capacityExceeded
+        }
+        for entry in entries {
+            try validateAABB(entry.bounds)
         }
 
         clear()
@@ -183,7 +187,7 @@ public struct CajuBVH: Sendable {
 
         for entry in entries {
             let proxyIdx = allocateProxySlot(tightBounds: entry.bounds, userData: entry.userData)
-            let fatBounds = entry.bounds.enlargedClamped(margin: fatMargin)
+            let fatBounds = aabbEnlargedClamped(entry.bounds, margin: fatMargin)
             let leafIdx = allocateNode(
                 bounds: fatBounds,
                 parent: Self.nullNode,
@@ -201,7 +205,7 @@ public struct CajuBVH: Sendable {
         count = n
         var bins = [SAHBin](repeating: SAHBin(), count: Self.sahBinCount)
         var leftBounds = [CajuAABB](
-            repeating: CajuAABB(uncheckedMin: .zero, max: .zero),
+            repeating: CajuAABB(min: .zero, max: .zero),
             count: Self.sahBinCount - 1
         )
         var leftCounts = [Int](repeating: 0, count: Self.sahBinCount - 1)
@@ -220,17 +224,19 @@ public struct CajuBVH: Sendable {
 
     /// Insere um novo elemento na BVH de forma incremental (custo por área + rotações AVL).
     ///
-    /// - Throws: `CajuSpatialError.capacityExceeded` se atingir `maxCapacity`.
+    /// - Throws: `CajuSpatialError.capacityExceeded` se atingir `maxCapacity`;
+    ///   `CajuSpatialError.nonFiniteBounds` ou `.invalidBounds` se `bounds` for inválida.
     public mutating func insert(
         bounds: CajuAABB,
         userData: UInt32 = 0
     ) throws(CajuSpatialError) -> CajuBVHProxy {
+        try validateAABB(bounds)
         guard count < maxCapacity else {
             throw .capacityExceeded
         }
 
         let proxyIdx = allocateProxySlot(tightBounds: bounds, userData: userData)
-        let fatBounds = bounds.enlargedClamped(margin: fatMargin)
+        let fatBounds = aabbEnlargedClamped(bounds, margin: fatMargin)
         let leafIdx = allocateNode(
             bounds: fatBounds,
             parent: Self.nullNode,
@@ -267,13 +273,14 @@ public struct CajuBVH: Sendable {
     ///   - bounds: Nova AABB justa.
     ///   - displacement: Deslocamento recente opcional para expandir a AABB gorda na direção do movimento.
     /// - Returns: `true` se a folha precisou ser reinserida na árvore; `false` se permaneceu dentro da AABB gorda.
-    /// - Throws: `CajuSpatialError.invalidHandle` ou `CajuSpatialError.nonFiniteInput`.
+    /// - Throws: `CajuSpatialError.invalidHandle`, `.nonFiniteBounds`, `.invalidBounds` ou `.nonFiniteInput`.
     @discardableResult
     public mutating func update(
         _ proxy: CajuBVHProxy,
         bounds: CajuAABB,
         displacement: SIMD3<Float> = .zero
     ) throws(CajuSpatialError) -> Bool {
+        try validateAABB(bounds)
         guard allFinite(displacement) else {
             throw .nonFiniteInput
         }
@@ -281,13 +288,14 @@ public struct CajuBVH: Sendable {
         let leafIdx = proxies[proxyIdx].nodeIndex
         proxies[proxyIdx].tightBounds = bounds
 
-        if nodes[Int(leafIdx)].bounds.contains(bounds) {
+        if aabbContains(nodes[Int(leafIdx)].bounds, bounds) {
             return false
         }
 
         removeLeaf(leafIdx)
         let predictedDisplacement = displacement * Self.displacementMultiplier
-        nodes[Int(leafIdx)].bounds = bounds.enlargedClamped(
+        nodes[Int(leafIdx)].bounds = aabbEnlargedClamped(
+            bounds,
             margin: fatMargin,
             displacement: predictedDisplacement
         )
@@ -307,7 +315,7 @@ public struct CajuBVH: Sendable {
             let i = Int(nodeIdx)
             if nodes[i].isLeaf {
                 let pIdx = Int(nodes[i].proxyIndex)
-                nodes[i].bounds = proxies[pIdx].tightBounds.enlargedClamped(margin: fatMargin)
+                nodes[i].bounds = aabbEnlargedClamped(proxies[pIdx].tightBounds, margin: fatMargin)
             } else if state == 0 {
                 stack.push(nodeIdx, tNear: 1)
                 stack.push(nodes[i].right, tNear: 0)
@@ -369,11 +377,18 @@ public struct CajuBVH: Sendable {
     ///
     /// Variante recomendada para o caminho quente: reutiliza `stack` sem alocações de *heap* após aquecida.
     @inlinable
-    public func raycastFirst(_ ray: CajuRay, stack: inout CajuBVHTraversalStack) -> CajuBVHRayHit? {
+    public func raycastFirst(_ ray: CajuRayQuery, stack: inout CajuBVHTraversalStack) -> CajuBVHRayHit? {
         stack.reset()
         defer { stack.reset() }
         guard root != Self.nullNode else { return nil }
-        guard let rootT = ray.intersect(nodes[Int(root)].bounds) else { return nil }
+        guard
+            let rootT = ray.intersectSlabs(
+                nodes[Int(root)].bounds,
+                tEnterInit: ray.tMin,
+                tExitInit: ray.tMax,
+                exitSlack: 0
+            )
+        else { return nil }
 
         var bestT = ray.tMax
         var bestHit: CajuBVHRayHit?
@@ -387,7 +402,12 @@ public struct CajuBVH: Sendable {
             if node.isLeaf {
                 let pIdx = Int(node.proxyIndex)
                 let entry = proxies[pIdx]
-                if let t = ray.intersect(entry.tightBounds, tMaxLimit: bestT) {
+                if let t = ray.intersectSlabs(
+                    entry.tightBounds,
+                    tEnterInit: ray.tMin,
+                    tExitInit: bestT,
+                    exitSlack: 0
+                ) {
                     if bestHit == nil || t < bestT {
                         bestT = t
                         bestHit = CajuBVHRayHit(
@@ -400,8 +420,18 @@ public struct CajuBVH: Sendable {
             } else {
                 let left = node.left
                 let right = node.right
-                let tLeft = ray.intersect(nodes[Int(left)].bounds, tMaxLimit: bestT)
-                let tRight = ray.intersect(nodes[Int(right)].bounds, tMaxLimit: bestT)
+                let tLeft = ray.intersectSlabs(
+                    nodes[Int(left)].bounds,
+                    tEnterInit: ray.tMin,
+                    tExitInit: bestT,
+                    exitSlack: 0
+                )
+                let tRight = ray.intersectSlabs(
+                    nodes[Int(right)].bounds,
+                    tEnterInit: ray.tMin,
+                    tExitInit: bestT,
+                    exitSlack: 0
+                )
 
                 switch (tLeft, tRight) {
                 case (let .some(tl), let .some(tr)):
@@ -429,7 +459,7 @@ public struct CajuBVH: Sendable {
     /// - Important: Aloca uma `CajuBVHTraversalStack` local a cada chamada (alocando em *heap*
     ///   se a profundidade ultrapassar 64 níveis). No caminho quente, use ``raycastFirst(_:stack:)``.
     @inlinable
-    public func raycastFirst(_ ray: CajuRay) -> CajuBVHRayHit? {
+    public func raycastFirst(_ ray: CajuRayQuery) -> CajuBVHRayHit? {
         var stack = CajuBVHTraversalStack()
         return raycastFirst(ray, stack: &stack)
     }
@@ -440,14 +470,21 @@ public struct CajuBVH: Sendable {
     /// O *visitor* retorna `true` para continuar a travessia ou `false` para interromper imediatamente.
     @inlinable
     public func raycastAll(
-        _ ray: CajuRay,
+        _ ray: CajuRayQuery,
         stack: inout CajuBVHTraversalStack,
         visitor: (CajuBVHRayHit) -> Bool
     ) {
         stack.reset()
         defer { stack.reset() }
         guard root != Self.nullNode else { return }
-        guard ray.intersect(nodes[Int(root)].bounds) != nil else { return }
+        guard
+            ray.intersectSlabs(
+                nodes[Int(root)].bounds,
+                tEnterInit: ray.tMin,
+                tExitInit: ray.tMax,
+                exitSlack: 0
+            ) != nil
+        else { return }
 
         stack.push(root)
         while let (nodeIdx, _) = stack.pop() {
@@ -455,7 +492,12 @@ public struct CajuBVH: Sendable {
             if node.isLeaf {
                 let pIdx = Int(node.proxyIndex)
                 let entry = proxies[pIdx]
-                if let t = ray.intersect(entry.tightBounds) {
+                if let t = ray.intersectSlabs(
+                    entry.tightBounds,
+                    tEnterInit: ray.tMin,
+                    tExitInit: ray.tMax,
+                    exitSlack: 0
+                ) {
                     let hit = CajuBVHRayHit(
                         proxy: CajuBVHProxy(index: UInt32(pIdx), generation: entry.generation),
                         userData: entry.userData,
@@ -464,10 +506,20 @@ public struct CajuBVH: Sendable {
                     if !visitor(hit) { return }
                 }
             } else {
-                if ray.intersect(nodes[Int(node.left)].bounds) != nil {
+                if ray.intersectSlabs(
+                    nodes[Int(node.left)].bounds,
+                    tEnterInit: ray.tMin,
+                    tExitInit: ray.tMax,
+                    exitSlack: 0
+                ) != nil {
                     stack.push(node.left)
                 }
-                if ray.intersect(nodes[Int(node.right)].bounds) != nil {
+                if ray.intersectSlabs(
+                    nodes[Int(node.right)].bounds,
+                    tEnterInit: ray.tMin,
+                    tExitInit: ray.tMax,
+                    exitSlack: 0
+                ) != nil {
                     stack.push(node.right)
                 }
             }
@@ -479,7 +531,7 @@ public struct CajuBVH: Sendable {
     /// - Important: Aloca uma `CajuBVHTraversalStack` local a cada chamada (alocando em *heap*
     ///   se a profundidade ultrapassar 64 níveis). No caminho quente, use ``raycastAll(_:stack:visitor:)``.
     @inlinable
-    public func raycastAll(_ ray: CajuRay, visitor: (CajuBVHRayHit) -> Bool) {
+    public func raycastAll(_ ray: CajuRayQuery, visitor: (CajuBVHRayHit) -> Bool) {
         var stack = CajuBVHTraversalStack()
         raycastAll(ray, stack: &stack, visitor: visitor)
     }
@@ -490,7 +542,7 @@ public struct CajuBVH: Sendable {
     /// sem alocações por consulta.
     @inlinable
     public func raycastAll(
-        _ ray: CajuRay,
+        _ ray: CajuRayQuery,
         into results: inout [CajuBVHRayHit],
         stack: inout CajuBVHTraversalStack
     ) {
@@ -504,16 +556,20 @@ public struct CajuBVH: Sendable {
     ///
     /// Variante recomendada para o caminho quente: reutiliza `stack` sem alocações de *heap* após aquecida.
     /// O *visitor* retorna `true` para continuar ou `false` para interromper.
+    ///
+    /// - Throws: `CajuSpatialError.nonFiniteBounds` ou `.invalidBounds` se `aabb` for inválida.
     @inlinable
     public func query(
         overlapping aabb: CajuAABB,
         stack: inout CajuBVHTraversalStack,
         visitor: (CajuBVHProxy, UInt32) -> Bool
-    ) {
+    ) throws(CajuSpatialError) {
+        try validateAABB(aabb)
+
         stack.reset()
         defer { stack.reset() }
         guard root != Self.nullNode else { return }
-        guard nodes[Int(root)].bounds.overlaps(aabb) else { return }
+        guard nodes[Int(root)].bounds.intersects(aabb) else { return }
 
         stack.push(root)
         while let (nodeIdx, _) = stack.pop() {
@@ -521,15 +577,15 @@ public struct CajuBVH: Sendable {
             if node.isLeaf {
                 let pIdx = Int(node.proxyIndex)
                 let entry = proxies[pIdx]
-                if entry.tightBounds.overlaps(aabb) {
+                if entry.tightBounds.intersects(aabb) {
                     let proxy = CajuBVHProxy(index: UInt32(pIdx), generation: entry.generation)
                     if !visitor(proxy, entry.userData) { return }
                 }
             } else {
-                if nodes[Int(node.left)].bounds.overlaps(aabb) {
+                if nodes[Int(node.left)].bounds.intersects(aabb) {
                     stack.push(node.left)
                 }
-                if nodes[Int(node.right)].bounds.overlaps(aabb) {
+                if nodes[Int(node.right)].bounds.intersects(aabb) {
                     stack.push(node.right)
                 }
             }
@@ -541,52 +597,54 @@ public struct CajuBVH: Sendable {
     /// - Important: Aloca uma `CajuBVHTraversalStack` local a cada chamada (alocando em *heap*
     ///   se a profundidade ultrapassar 64 níveis). No caminho quente, use
     ///   ``query(overlapping:stack:visitor:)``.
+    /// - Throws: `CajuSpatialError.nonFiniteBounds` ou `.invalidBounds` se `aabb` for inválida.
     @inlinable
-    public func query(overlapping aabb: CajuAABB, visitor: (CajuBVHProxy, UInt32) -> Bool) {
+    public func query(
+        overlapping aabb: CajuAABB,
+        visitor: (CajuBVHProxy, UInt32) -> Bool
+    ) throws(CajuSpatialError) {
         var stack = CajuBVHTraversalStack()
-        query(overlapping: aabb, stack: &stack, visitor: visitor)
+        try query(overlapping: aabb, stack: &stack, visitor: visitor)
     }
 
     /// Acrescenta em `results` os proxies cuja AABB justa sobrepõe `aabb`.
     ///
     /// Variante recomendada para o caminho quente: reutiliza `stack` e a capacidade de `results`
     /// sem alocações por consulta.
+    ///
+    /// - Throws: `CajuSpatialError.nonFiniteBounds` ou `.invalidBounds` se `aabb` for inválida.
     @inlinable
     public func query(
         overlapping aabb: CajuAABB,
         into results: inout [CajuBVHProxy],
         stack: inout CajuBVHTraversalStack
-    ) {
-        query(overlapping: aabb, stack: &stack) { proxy, _ in
+    ) throws(CajuSpatialError) {
+        try query(overlapping: aabb, stack: &stack) { proxy, _ in
             results.append(proxy)
             return true
         }
     }
 
-    /// Consulta de *shapecast* por esfera `(center, radius)` sobre as AABBs justas dos proxies.
+    /// Consulta de *shapecast* por esfera `CajuSphere` sobre as AABBs justas dos proxies.
     ///
     /// Variante recomendada para o caminho quente: reutiliza `stack` sem alocações de *heap* após aquecida.
     ///
-    /// - Throws: `CajuSpatialError.nonFiniteInput` se `center` ou `radius` não forem finitos;
-    ///   `CajuSpatialError.invalidRadius` se `radius < 0`.
+    /// - Throws: `CajuSpatialError.nonFiniteInput` se `sphere.center` ou `sphere.radius` não forem finitos;
+    ///   `CajuSpatialError.invalidRadius` se `sphere.radius < 0`.
     @inlinable
     public func shapecast(
-        sphereCenter center: SIMD3<Float>,
-        radius: Float,
+        sphere: CajuSphere,
         stack: inout CajuBVHTraversalStack,
         visitor: (CajuBVHProxy, UInt32) -> Bool
     ) throws(CajuSpatialError) {
-        guard allFinite(center), radius.isFinite else {
-            throw .nonFiniteInput
-        }
-        guard radius >= 0 else {
-            throw .invalidRadius
-        }
+        try validateSphere(sphere)
+        let center = sphere.center.storage
+        let radius = sphere.radius
 
         stack.reset()
         defer { stack.reset() }
         guard root != Self.nullNode else { return }
-        guard nodes[Int(root)].bounds.overlapsSphere(center: center, radius: radius) else { return }
+        guard aabbOverlapsSphere(nodes[Int(root)].bounds, center: center, radius: radius) else { return }
 
         stack.push(root)
         while let (nodeIdx, _) = stack.pop() {
@@ -594,15 +652,15 @@ public struct CajuBVH: Sendable {
             if node.isLeaf {
                 let pIdx = Int(node.proxyIndex)
                 let entry = proxies[pIdx]
-                if entry.tightBounds.overlapsSphere(center: center, radius: radius) {
+                if aabbOverlapsSphere(entry.tightBounds, center: center, radius: radius) {
                     let proxy = CajuBVHProxy(index: UInt32(pIdx), generation: entry.generation)
                     if !visitor(proxy, entry.userData) { return }
                 }
             } else {
-                if nodes[Int(node.left)].bounds.overlapsSphere(center: center, radius: radius) {
+                if aabbOverlapsSphere(nodes[Int(node.left)].bounds, center: center, radius: radius) {
                     stack.push(node.left)
                 }
-                if nodes[Int(node.right)].bounds.overlapsSphere(center: center, radius: radius) {
+                if aabbOverlapsSphere(nodes[Int(node.right)].bounds, center: center, radius: radius) {
                     stack.push(node.right)
                 }
             }
@@ -613,15 +671,14 @@ public struct CajuBVH: Sendable {
     ///
     /// - Important: Aloca uma `CajuBVHTraversalStack` local a cada chamada (alocando em *heap*
     ///   se a profundidade ultrapassar 64 níveis). No caminho quente, use
-    ///   ``shapecast(sphereCenter:radius:stack:visitor:)``.
+    ///   ``shapecast(sphere:stack:visitor:)``.
     @inlinable
     public func shapecast(
-        sphereCenter center: SIMD3<Float>,
-        radius: Float,
+        sphere: CajuSphere,
         visitor: (CajuBVHProxy, UInt32) -> Bool
     ) throws(CajuSpatialError) {
         var stack = CajuBVHTraversalStack()
-        try shapecast(sphereCenter: center, radius: radius, stack: &stack, visitor: visitor)
+        try shapecast(sphere: sphere, stack: &stack, visitor: visitor)
     }
 
     /// Consulta de *shapecast* por AABB varrida (*swept AABB*): testa `aabb` movendo-se
@@ -629,7 +686,8 @@ public struct CajuBVH: Sendable {
     ///
     /// Variante recomendada para o caminho quente: reutiliza `stack` sem alocações de *heap* após aquecida.
     ///
-    /// - Throws: `CajuSpatialError.nonFiniteInput` se `displacement` não for finito.
+    /// - Throws: `CajuSpatialError.nonFiniteBounds` ou `.invalidBounds` se `aabb` for inválida;
+    ///   `CajuSpatialError.nonFiniteInput` se `displacement` não for finito.
     @inlinable
     public func shapecast(
         swept aabb: CajuAABB,
@@ -637,22 +695,30 @@ public struct CajuBVH: Sendable {
         stack: inout CajuBVHTraversalStack,
         visitor: (CajuBVHSweptHit) -> Bool
     ) throws(CajuSpatialError) {
+        try validateAABB(aabb)
         guard allFinite(displacement) else {
             throw .nonFiniteInput
         }
         if displacement == .zero {
-            query(overlapping: aabb, stack: &stack) { proxy, userData in
+            try query(overlapping: aabb, stack: &stack) { proxy, userData in
                 visitor(CajuBVHSweptHit(proxy: proxy, userData: userData, t: 0))
             }
             return
         }
 
-        let ray = try CajuRay(origin: .zero, direction: displacement, tMin: 0, tMax: 1)
+        let ray = try CajuRayQuery(origin: .zero, direction: displacement, tMin: 0, tMax: 1)
 
         stack.reset()
         defer { stack.reset() }
         guard root != Self.nullNode else { return }
-        guard ray.intersect(minkowskiExpand(nodes[Int(root)].bounds, by: aabb)) != nil else { return }
+        guard
+            ray.intersectSlabs(
+                minkowskiExpand(nodes[Int(root)].bounds, by: aabb),
+                tEnterInit: 0,
+                tExitInit: 1,
+                exitSlack: 0
+            ) != nil
+        else { return }
 
         stack.push(root)
         while let (nodeIdx, _) = stack.pop() {
@@ -660,7 +726,12 @@ public struct CajuBVH: Sendable {
             if node.isLeaf {
                 let pIdx = Int(node.proxyIndex)
                 let entry = proxies[pIdx]
-                if let t = ray.intersect(minkowskiExpand(entry.tightBounds, by: aabb)) {
+                if let t = ray.intersectSlabs(
+                    minkowskiExpand(entry.tightBounds, by: aabb),
+                    tEnterInit: 0,
+                    tExitInit: 1,
+                    exitSlack: 0
+                ) {
                     let hit = CajuBVHSweptHit(
                         proxy: CajuBVHProxy(index: UInt32(pIdx), generation: entry.generation),
                         userData: entry.userData,
@@ -669,10 +740,20 @@ public struct CajuBVH: Sendable {
                     if !visitor(hit) { return }
                 }
             } else {
-                if ray.intersect(minkowskiExpand(nodes[Int(node.left)].bounds, by: aabb)) != nil {
+                if ray.intersectSlabs(
+                    minkowskiExpand(nodes[Int(node.left)].bounds, by: aabb),
+                    tEnterInit: 0,
+                    tExitInit: 1,
+                    exitSlack: 0
+                ) != nil {
                     stack.push(node.left)
                 }
-                if ray.intersect(minkowskiExpand(nodes[Int(node.right)].bounds, by: aabb)) != nil {
+                if ray.intersectSlabs(
+                    minkowskiExpand(nodes[Int(node.right)].bounds, by: aabb),
+                    tEnterInit: 0,
+                    tExitInit: 1,
+                    exitSlack: 0
+                ) != nil {
                     stack.push(node.right)
                 }
             }
@@ -750,7 +831,10 @@ public struct CajuBVH: Sendable {
                 let pIdx = Int(node.proxyIndex)
                 if pIdx < 0 || pIdx >= proxies.count { return false }
                 if proxies[pIdx].nodeIndex != nodeIdx { return false }
-                if !node.bounds.contains(proxies[pIdx].tightBounds) { return false }
+                if !isValidAABB(proxies[pIdx].tightBounds) || !isValidAABB(node.bounds) {
+                    return false
+                }
+                if !aabbContains(node.bounds, proxies[pIdx].tightBounds) { return false }
                 visitedLeaves += 1
             } else {
                 let l = Int(node.left)
@@ -760,7 +844,9 @@ public struct CajuBVH: Sendable {
                 if node.height != 1 + Swift.max(nodes[l].height, nodes[r].height) { return false }
                 let expectedBounds = nodes[l].bounds.union(nodes[r].bounds)
                 if node.bounds != expectedBounds { return false }
-                if !node.bounds.contains(nodes[l].bounds) || !node.bounds.contains(nodes[r].bounds) {
+                if !aabbContains(node.bounds, nodes[l].bounds)
+                    || !aabbContains(node.bounds, nodes[r].bounds)
+                {
                     return false
                 }
                 stack.push(node.left)
@@ -777,9 +863,9 @@ public struct CajuBVH: Sendable {
 
     @inlinable
     internal func minkowskiExpand(_ target: CajuAABB, by moving: CajuAABB) -> CajuAABB {
-        let minP = clampToFinite(target.min - moving.max)
-        let maxP = clampToFinite(target.max - moving.min)
-        return CajuAABB(uncheckedMin: minP, max: maxP)
+        let minP = clampToFinite(target.min.storage - moving.max.storage)
+        let maxP = clampToFinite(target.max.storage - moving.min.storage)
+        return CajuAABB(min: CajuVec3(storage: minP), max: CajuVec3(storage: maxP))
     }
 
     @inlinable
@@ -905,10 +991,10 @@ public struct CajuBVH: Sendable {
             return parent
         }
 
-        var cMin = nodes[Int(leafNodes[start])].bounds.center
+        var cMin = aabbCenter(nodes[Int(leafNodes[start])].bounds)
         var cMax = cMin
         for idx in (start + 1)..<end {
-            let c = nodes[Int(leafNodes[idx])].bounds.center
+            let c = aabbCenter(nodes[Int(leafNodes[idx])].bounds)
             cMin = SIMD3<Float>(
                 Swift.min(cMin.x, c.x),
                 Swift.min(cMin.y, c.y),
@@ -941,7 +1027,7 @@ public struct CajuBVH: Sendable {
             let minVal = cMin[axis]
             for idx in start..<end {
                 let nodeIdx = Int(leafNodes[idx])
-                let c = nodes[nodeIdx].bounds.center[axis]
+                let c = aabbCenter(nodes[nodeIdx].bounds)[axis]
                 let rawBin = Int((c - minVal) * scale)
                 let b = Swift.min(Self.sahBinCount - 1, Swift.max(0, rawBin))
                 let nodeBounds = nodes[nodeIdx].bounds
@@ -957,7 +1043,7 @@ public struct CajuBVH: Sendable {
             // Varredura prefixa (esquerda -> direita)
             var accCount = 0
             var accOccupied = false
-            var accBounds = CajuAABB(uncheckedMin: .zero, max: .zero)
+            var accBounds = CajuAABB(min: .zero, max: .zero)
             for i in 0..<(Self.sahBinCount - 1) {
                 if bins[i].occupied {
                     accBounds = accOccupied ? accBounds.union(bins[i].bounds) : bins[i].bounds
@@ -971,7 +1057,7 @@ public struct CajuBVH: Sendable {
             // Varredura sufixa (direita -> esquerda) avaliando custo SAH
             var rightCount = 0
             var rightOccupied = false
-            var rightBounds = CajuAABB(uncheckedMin: .zero, max: .zero)
+            var rightBounds = CajuAABB(min: .zero, max: .zero)
             for i in stride(from: Self.sahBinCount - 1, through: 1, by: -1) {
                 if bins[i].occupied {
                     rightBounds = rightOccupied ? rightBounds.union(bins[i].bounds) : bins[i].bounds
@@ -981,8 +1067,8 @@ public struct CajuBVH: Sendable {
                 let leftCount = leftCounts[i - 1]
                 if leftCount > 0 && rightCount > 0 {
                     let cost =
-                        Float(leftCount) * leftBounds[i - 1].surfaceArea
-                        + Float(rightCount) * rightBounds.surfaceArea
+                        Float(leftCount) * aabbSurfaceArea(leftBounds[i - 1])
+                        + Float(rightCount) * aabbSurfaceArea(rightBounds)
                     if cost < bestCost {
                         bestCost = cost
                         bestAxis = axis
@@ -999,7 +1085,7 @@ public struct CajuBVH: Sendable {
             var left = start
             var right = end - 1
             while left <= right {
-                let c = nodes[Int(leafNodes[left])].bounds.center[bestAxis]
+                let c = aabbCenter(nodes[Int(leafNodes[left])].bounds)[bestAxis]
                 let b = Swift.min(
                     Self.sahBinCount - 1,
                     Swift.max(0, Int((c - bestAxisMin) * bestAxisScale))
@@ -1058,28 +1144,28 @@ public struct CajuBVH: Sendable {
         while !nodes[Int(index)].isLeaf {
             let child1 = nodes[Int(index)].left
             let child2 = nodes[Int(index)].right
-            let area = nodes[Int(index)].bounds.surfaceArea
+            let area = aabbSurfaceArea(nodes[Int(index)].bounds)
             let combinedAABB = nodes[Int(index)].bounds.union(leafAABB)
-            let combinedArea = combinedAABB.surfaceArea
+            let combinedArea = aabbSurfaceArea(combinedAABB)
 
             let cost = 2.0 * combinedArea
             let inheritanceCost = 2.0 * (combinedArea - area)
 
             let cost1: Float
             if nodes[Int(child1)].isLeaf {
-                cost1 = leafAABB.union(nodes[Int(child1)].bounds).surfaceArea + inheritanceCost
+                cost1 = aabbSurfaceArea(leafAABB.union(nodes[Int(child1)].bounds)) + inheritanceCost
             } else {
-                let oldArea = nodes[Int(child1)].bounds.surfaceArea
-                let newArea = leafAABB.union(nodes[Int(child1)].bounds).surfaceArea
+                let oldArea = aabbSurfaceArea(nodes[Int(child1)].bounds)
+                let newArea = aabbSurfaceArea(leafAABB.union(nodes[Int(child1)].bounds))
                 cost1 = (newArea - oldArea) + inheritanceCost
             }
 
             let cost2: Float
             if nodes[Int(child2)].isLeaf {
-                cost2 = leafAABB.union(nodes[Int(child2)].bounds).surfaceArea + inheritanceCost
+                cost2 = aabbSurfaceArea(leafAABB.union(nodes[Int(child2)].bounds)) + inheritanceCost
             } else {
-                let oldArea = nodes[Int(child2)].bounds.surfaceArea
-                let newArea = leafAABB.union(nodes[Int(child2)].bounds).surfaceArea
+                let oldArea = aabbSurfaceArea(nodes[Int(child2)].bounds)
+                let newArea = aabbSurfaceArea(leafAABB.union(nodes[Int(child2)].bounds))
                 cost2 = (newArea - oldArea) + inheritanceCost
             }
 
