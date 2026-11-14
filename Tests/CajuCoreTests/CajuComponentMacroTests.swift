@@ -1,7 +1,10 @@
 // Fora do Android: no build cruzado (swift-android-action, com índice ligado) o SwiftPM falha ao abrir
 // o índice do código expandido da macro ("Failed opening .../index/store/...CajuComponentMacroTests...").
 // O CajuCore em si compila; só o uso da macro neste teste é pulado até o job Android estabilizar (ADR 0020).
-#if !os(Android)
+#if os(Android)
+    // Placeholder: um arquivo sem código não gera objeto e o índice do build cruzado reclama.
+    enum CajuComponentMacroTestsPlaceholder { static let skipped = true }
+#else
     import CajuCore
     import Testing
 
