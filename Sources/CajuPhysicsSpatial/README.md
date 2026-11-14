@@ -4,7 +4,8 @@ BVH dinâmica e estática e consultas espaciais (*raycast*, sobreposição, *sha
 
 - **Camada:** 1 (dependências só para baixo; ver §5 do plano).
 - **Trilha dona:** P-3.
-- **Estado:** implementado (primitivas `CajuAABB`, `CajuRay`, `CajuTriangle`, pilha `CajuBVHTraversalStack`, `CajuBVH` dinâmica com SAH *binned* / rotações AVL e `CajuTriangleBVH` estática com SAH *binned* e Möller–Trumbore). Sem medições de benchmark dedicadas até o momento (`(?)`).
+- **Estado:** implementado (primitivas `CajuAABB`, `CajuRay`, `CajuTriangle`, pilha `CajuBVHTraversalStack`, `CajuBVH` dinâmica com SAH *binned* / rotações AVL e `CajuTriangleBVH` estática com SAH *binned* e Möller–Trumbore; [ADR 0018](../../docs/adr/0018-bvh-e-primitivas-espaciais.md)).
+- **Benchmark:** pendente — exigiria `CajuBenchmarks` depender de `CajuPhysicsSpatial`, mudança no `Package.swift` (PR dedicado); metas `(?)` até medir.
 
 ## Dependências
 - `CajuMath`
@@ -26,10 +27,10 @@ Sem dependência de `Foundation`, `Glibc` ou `Darwin`. Construído com `.swiftLa
 - **BVH dinâmica (`CajuBVH`):**
   - Handles geracionais `CajuBVHProxy` (`isValid(_:)`, `bounds(for:)`, `userData(for:)`) e resultados `CajuBVHRayHit` / `CajuBVHSweptHit`.
   - Construção em lote com SAH *binned* (16 *bins*) via `build(from:)`; inserção incremental por custo de área + rotações (`insert(bounds:userData:)`); remoção com *free list* de nós e slots (`remove(_:)`); atualização com AABB gorda e margem (`update(_:bounds:displacement:)`); `refit()`; `clear()`; `validate()`.
-  - Consultas com *visitors* não-escapantes ou preenchimento de *buffers*: `raycastFirst`, `raycastAll`, `query(overlapping:)`, `shapecast(sphereCenter:radius:)`, `shapecast(swept:displacement:)`.
+  - Consultas com *visitors* não-escapantes ou preenchimento de *buffers*: `raycastFirst`, `raycastAll`, `query(overlapping:)`, `shapecast(sphereCenter:radius:)`, `shapecast(swept:displacement:)`. No caminho quente, use as sobrecargas com `stack: inout CajuBVHTraversalStack` (sem alocação de *heap* após a pilha aquecida); as sobrecargas sem `stack:` alocam uma pilha local por chamada (alocando em *heap* se a profundidade exceder 64 níveis).
 - **BVH estática de triângulos (`CajuTriangleBVH`):**
   - Construção com SAH *binned* (16 *bins*, até 4 triângulos por folha) a partir de `[CajuVec3]`, `[SIMD3<Float>]` ou `packedPositions: [Float]` e `indices: [UInt32]`, validando finitude e limites de índices.
-  - `triangleCount`, `isEmpty`, `bounds`, `triangle(at:)`, `validate()`, `raycastFirst`, `raycastAll` (`CajuTriangleBVHHit`), `query(overlapping:)` (SAT) e `query(overlappingSphereCenter:radius:)`.
+  - `triangleCount`, `isEmpty`, `bounds`, `triangle(at:)`, `validate()`, `raycastFirst`, `raycastAll` (`CajuTriangleBVHHit`), `query(overlapping:)` (SAT) e `query(overlappingSphereCenter:radius:)`. No caminho quente, use as sobrecargas com `stack: inout CajuBVHTraversalStack`.
 
 ## Como testar
 
@@ -52,4 +53,4 @@ swift test
 - `CajuBVHTraversalStack` evita alocações de *heap* até profundidade 64; árvores mais profundas que 64 níveis alocam no *buffer* de *overflow* na primeira ultrapassagem (reaproveitado após `reset()`).
 - Componentes não-nulos subnormais em `CajuRay.direction` cujo recíproco `1.0 / component` sature em `±infinity` são tratados como paralelos (testam contenção da origem no *slab* do eixo correspondente).
 - `CajuTriangle.intersect(ray:)` descarta triângulos colineares/degenerados com razão área²/arestas² `<= 1e-12` (em `Float32`) para evitar hits espúrios, e `CajuTriangleBVH` aplica folga `1e-6` na poda de AABBs durante o *raycast* para absorver arredondamento entre *slabs* e Möller–Trumbore.
-- Este módulo ainda não possui alvo de benchmark ligado no `caju-bench`; números de vazão e latência de consultas permanecem não medidos (`(?)`).
+- Benchmark: pendente — exigiria `CajuBenchmarks` depender de `CajuPhysicsSpatial`, mudança no `Package.swift` (PR dedicado); metas `(?)` até medir.

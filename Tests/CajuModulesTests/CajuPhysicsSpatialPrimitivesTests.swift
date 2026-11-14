@@ -137,6 +137,13 @@ struct CajuPhysicsSpatialPrimitivesTests {
         #expect(throws: CajuSpatialError.nonFiniteBounds) {
             _ = try a.enlarged(margin: .infinity)
         }
+        let nearMaxBox = try CajuAABB(
+            min: SIMD3<Float>(1e38, 1e38, 1e38),
+            max: SIMD3<Float>(2e38, 2e38, 2e38)
+        )
+        #expect(throws: CajuSpatialError.nonFiniteBounds) {
+            _ = try nearMaxBox.enlarged(margin: 2e38)
+        }
         #expect(throws: CajuSpatialError.invalidBounds) {
             _ = try a.enlarged(margin: -1.5)
         }
@@ -177,6 +184,15 @@ struct CajuPhysicsSpatialPrimitivesTests {
         }
         #expect(throws: CajuSpatialError.invalidRayRange) {
             _ = try CajuRay(origin: .zero, direction: SIMD3<Float>(1, 0, 0), tMin: 5, tMax: 4)
+        }
+        #expect(throws: CajuSpatialError.nonFiniteRay) {
+            _ = try CajuRay(origin: CajuVec3(.nan, 0, 0), direction: CajuVec3(1, 0, 0))
+        }
+        #expect(throws: CajuSpatialError.invalidRayDirection) {
+            _ = try CajuRay(origin: CajuVec3(0, 0, 0), direction: CajuVec3(0, 0, 0))
+        }
+        #expect(throws: CajuSpatialError.invalidRayRange) {
+            _ = try CajuRay(origin: CajuVec3(0, 0, 0), direction: CajuVec3(1, 0, 0), tMin: 2, tMax: 1)
         }
     }
 
@@ -230,9 +246,25 @@ struct CajuPhysicsSpatialPrimitivesTests {
         let toPoint = try CajuRay(origin: SIMD3<Float>(0, 4, 5), direction: SIMD3<Float>(1, 0, 0))
         #expect(toPoint.intersect(pointBox) == 3)
 
-        // Corte por tMax e tMaxLimit.
+        // Corte por tMax e tMaxLimit (incluindo NaN).
         #expect(perpHit.intersect(flatBox, tMaxLimit: 2.99) == nil)
         #expect(perpHit.intersect(flatBox, tMaxLimit: 3.0) == 3)
+        #expect(perpHit.intersect(flatBox, tMaxLimit: .nan) == nil)
+        #expect(flatBox.intersect(ray: perpHit, tMaxLimit: .nan) == nil)
+
+        // Componente subnormal cujo recíproco satura em ±infinity é tratado como paralelo sem NaN.
+        let subnormalParallelHit = try CajuRay(
+            origin: SIMD3<Float>(-2, 1, 1),
+            direction: SIMD3<Float>(1, .leastNonzeroMagnitude, 0)
+        )
+        #expect(!subnormalParallelHit.inverseDirection.y.isFinite)
+        #expect(subnormalParallelHit.intersect(unitBox) == 2)
+
+        let subnormalParallelMiss = try CajuRay(
+            origin: SIMD3<Float>(-2, 2.5, 1),
+            direction: SIMD3<Float>(1, .leastNonzeroMagnitude, 0)
+        )
+        #expect(subnormalParallelMiss.intersect(unitBox) == nil)
     }
 
     @Test func rayAABBMatchesDoubleOracleFuzz() throws {

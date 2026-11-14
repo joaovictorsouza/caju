@@ -86,7 +86,7 @@ Escopo original:
 | **TB-Android** | Platform Android, backend Vulkan | Gradle/CMake/JNI/`libswiftCore.so`, Game Thread, Vulkan próprio + VMA no S22; **timebox de 5 dias**, kill-criteria definidos antes de começar |
 | **P-1** | `CajuMath` completo | SIMD, interseções, cor, easing, testes de propriedade |
 | **P-2** | `CajuAssetsCore` | glTF (validação rigorosa), KTX2/Basis, meshopt, PNG/JPEG, *fuzz* |
-| **P-3** | `CajuPhysicsSpatial` | BVH dinâmica, raycast/shapecast/sobreposição |
+| **P-3** | `CajuPhysicsSpatial` | BVH dinâmica e de triângulos, raycast/shapecast/sobreposição (**implementado**; testes em `CajuModulesTests`, benchmark pendente `(?)`, [ADR 0018](adr/0018-bvh-e-primitivas-espaciais.md)) |
 | **P-4** | `CajuUILayout` | Árvore retida, protocolo de layout SwiftUI-like, stacks/ZStack/frame/Spacer, hit-testing |
 | **P-5** | `CajuText` | Shaping, medida, quebra de linha, atlas MSDF em bitmap de CPU, modelo do `TextEditor` |
 

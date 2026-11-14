@@ -106,9 +106,10 @@ struct CajuPhysicsSpatialTriangleTests {
         let edgeHit = try #require(tri.intersect(ray: edgeRay))
         #expect(closeRelative(edgeHit.u + edgeHit.v, 1))
 
-        // Corte por tMax / tMaxLimit e tMin.
+        // Corte por tMax / tMaxLimit e tMin (incluindo NaN).
         #expect(tri.intersect(ray: frontRay, tMaxLimit: 2.99) == nil)
         #expect(tri.intersect(ray: frontRay, tMaxLimit: 3.0) != nil)
+        #expect(tri.intersect(ray: frontRay, tMaxLimit: .nan) == nil)
         let pastOrigin = try CajuRay(
             origin: SIMD3<Float>(0.5, 0.5, 3),
             direction: SIMD3<Float>(0, 0, -1),
@@ -184,6 +185,30 @@ struct CajuPhysicsSpatialTriangleTests {
         let ray = try CajuRay(origin: SIMD3<Float>(0, 0, -5), direction: SIMD3<Float>(0, 0, 1))
         #expect(empty.raycastFirst(ray) == nil)
 
+        var emptyStack = CajuBVHTraversalStack()
+        var emptyRayHits: [CajuTriangleBVHHit] = []
+        empty.raycastAll(ray, into: &emptyRayHits, stack: &emptyStack)
+        #expect(emptyRayHits.isEmpty)
+
+        let emptyQueryBox = try CajuAABB(min: SIMD3<Float>(-1, -1, -1), max: SIMD3<Float>(1, 1, 1))
+        var emptyBoxCount = 0
+        empty.query(overlapping: emptyQueryBox) { _ in
+            emptyBoxCount += 1
+            return true
+        }
+        #expect(emptyBoxCount == 0)
+
+        var emptySphereCount = 0
+        try empty.query(overlappingSphereCenter: .zero, radius: 5) { _ in
+            emptySphereCount += 1
+            return true
+        }
+        #expect(emptySphereCount == 0)
+
+        let builtEmpty = try CajuTriangleBVH(positions: [SIMD3<Float>](), indices: [])
+        #expect(builtEmpty.isEmpty)
+        #expect(builtEmpty.validate())
+
         // Validações de entrada inválida.
         #expect(throws: CajuSpatialError.nonFiniteInput) {
             _ = try CajuTriangleBVH(
@@ -219,6 +244,12 @@ struct CajuPhysicsSpatialTriangleTests {
             _ = try CajuTriangleBVH(
                 positions: [SIMD3<Float>(0, 0, 0), SIMD3<Float>(1, 0, 0), SIMD3<Float>(0, 1, 0)],
                 indices: [0, 1, 3]
+            )
+        }
+        #expect(throws: CajuSpatialError.invalidTriangleIndices) {
+            _ = try CajuTriangleBVH(
+                positions: [SIMD3<Float>](),
+                indices: [0, 1, 2]
             )
         }
         #expect(throws: CajuSpatialError.capacityExceeded) {
@@ -293,6 +324,77 @@ struct CajuPhysicsSpatialTriangleTests {
             return false
         }
         #expect(sphereCount == 1)
+    }
+
+    @Test func singleTriangleDegenerateOnlyAndDeepMeshQueries() throws {
+        // Malha com 1 único triângulo: todas as consultas sem e com stack.
+        let singleBVH = try CajuTriangleBVH(
+            positions: [
+                SIMD3<Float>(0, 0, 0),
+                SIMD3<Float>(2, 0, 0),
+                SIMD3<Float>(0, 2, 0),
+            ],
+            indices: [0, 1, 2]
+        )
+        #expect(singleBVH.validate())
+        #expect(singleBVH.triangleCount == 1)
+
+        let ray = try CajuRay(origin: SIMD3<Float>(0.5, 0.5, -2), direction: SIMD3<Float>(0, 0, 1))
+        let singleFirst = try #require(singleBVH.raycastFirst(ray))
+        #expect(singleFirst.triangleIndex == 0)
+        #expect(closeRelative(singleFirst.t, 2))
+
+        var singleAll: [UInt32] = []
+        singleBVH.raycastAll(ray) { hit in
+            singleAll.append(hit.triangleIndex)
+            return true
+        }
+        #expect(singleAll == [0])
+
+        let box = try CajuAABB(min: SIMD3<Float>(0, 0, -1), max: SIMD3<Float>(1, 1, 1))
+        var singleBox: [UInt32] = []
+        singleBVH.query(overlapping: box) { idx in
+            singleBox.append(idx)
+            return true
+        }
+        #expect(singleBox == [0])
+
+        var singleSphere: [UInt32] = []
+        try singleBVH.query(overlappingSphereCenter: SIMD3<Float>(0.5, 0.5, 0.5), radius: 0.6) { idx in
+            singleSphere.append(idx)
+            return true
+        }
+        #expect(singleSphere == [0])
+
+        // Malha contendo apenas triângulos degenerados (colinear e coincidente).
+        let degPositions: [SIMD3<Float>] = [
+            SIMD3<Float>(0, 0, 0), SIMD3<Float>(1, 0, 0), SIMD3<Float>(2, 0, 0),
+            SIMD3<Float>(5, 5, 5), SIMD3<Float>(5, 5, 5), SIMD3<Float>(5, 5, 5),
+        ]
+        let degBVH = try CajuTriangleBVH(positions: degPositions, indices: [0, 1, 2, 3, 4, 5])
+        #expect(degBVH.validate())
+
+        let degRay = try CajuRay(origin: SIMD3<Float>(1, 0, -1), direction: SIMD3<Float>(0, 0, 1))
+        #expect(degBVH.raycastFirst(degRay) == nil)
+        var degAll: [CajuTriangleBVHHit] = []
+        var stack = CajuBVHTraversalStack()
+        degBVH.raycastAll(degRay, into: &degAll, stack: &stack)
+        #expect(degAll.isEmpty)
+
+        let degQueryBox = try CajuAABB(min: SIMD3<Float>(0.5, -0.5, -0.5), max: SIMD3<Float>(1.5, 0.5, 0.5))
+        var degBoxHits: [UInt32] = []
+        degBVH.query(overlapping: degQueryBox, stack: &stack) { idx in
+            degBoxHits.append(idx)
+            return true
+        }
+        #expect(degBoxHits == [0])
+
+        var degSphereHits: [UInt32] = []
+        try degBVH.query(overlappingSphereCenter: SIMD3<Float>(5, 5, 5), radius: 0.1, stack: &stack) { idx in
+            degSphereHits.append(idx)
+            return true
+        }
+        #expect(degSphereHits == [1])
     }
 
     @Test func triangleBVHRaycastFirstExitSlackRegression() throws {

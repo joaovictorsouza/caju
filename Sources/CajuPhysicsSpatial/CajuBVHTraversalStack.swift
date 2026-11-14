@@ -64,11 +64,8 @@ public struct CajuBVHTraversalStack: Sendable {
         if count < Self.inlineCapacity {
             return getInline(at: count)
         }
-        let idx = count - Self.inlineCapacity
-        let node = overflowNodes[idx]
-        let t = overflowTNear[idx]
-        overflowNodes.removeLast()
-        overflowTNear.removeLast()
+        let node = overflowNodes.removeLast()
+        let t = overflowTNear.removeLast()
         return (node, t)
     }
 

@@ -194,7 +194,8 @@ public struct CajuBVH: Sendable {
             )
             proxies[Int(proxyIdx)].nodeIndex = leafIdx
             leafNodes.append(leafIdx)
-            result.append(CajuBVHProxy(index: UInt32(proxyIdx), generation: proxies[Int(proxyIdx)].generation))
+            let gen = proxies[Int(proxyIdx)].generation
+            result.append(CajuBVHProxy(index: UInt32(proxyIdx), generation: gen))
         }
 
         count = n
@@ -220,7 +221,10 @@ public struct CajuBVH: Sendable {
     /// Insere um novo elemento na BVH de forma incremental (custo por área + rotações AVL).
     ///
     /// - Throws: `CajuSpatialError.capacityExceeded` se atingir `maxCapacity`.
-    public mutating func insert(bounds: CajuAABB, userData: UInt32 = 0) throws(CajuSpatialError) -> CajuBVHProxy {
+    public mutating func insert(
+        bounds: CajuAABB,
+        userData: UInt32 = 0
+    ) throws(CajuSpatialError) -> CajuBVHProxy {
         guard count < maxCapacity else {
             throw .capacityExceeded
         }
@@ -334,8 +338,9 @@ public struct CajuBVH: Sendable {
     /// Indica se `proxy` ainda é válido e ativo nesta BVH.
     @inlinable
     public func isValid(_ proxy: CajuBVHProxy) -> Bool {
-        let idx = Int(proxy.index)
-        guard idx >= 0, idx < proxies.count else { return false }
+        guard let idx = Int(exactly: proxy.index), idx >= 0, idx < proxies.count else {
+            return false
+        }
         let entry = proxies[idx]
         return entry.nodeIndex != Self.nullNode && entry.generation == proxy.generation
     }
@@ -361,6 +366,8 @@ public struct CajuBVH: Sendable {
     // MARK: - Consultas
 
     /// Retorna o primeiro impacto ao longo de `ray` (menor `t` em `[ray.tMin, ray.tMax]`), ou `nil`.
+    ///
+    /// Variante recomendada para o caminho quente: reutiliza `stack` sem alocações de *heap* após aquecida.
     @inlinable
     public func raycastFirst(_ ray: CajuRay, stack: inout CajuBVHTraversalStack) -> CajuBVHRayHit? {
         stack.reset()
@@ -397,7 +404,7 @@ public struct CajuBVH: Sendable {
                 let tRight = ray.intersect(nodes[Int(right)].bounds, tMaxLimit: bestT)
 
                 switch (tLeft, tRight) {
-                case let (.some(tl), .some(tr)):
+                case (let .some(tl), let .some(tr)):
                     if tl <= tr {
                         stack.push(right, tNear: tr)
                         stack.push(left, tNear: tl)
@@ -405,9 +412,9 @@ public struct CajuBVH: Sendable {
                         stack.push(left, tNear: tl)
                         stack.push(right, tNear: tr)
                     }
-                case let (.some(tl), .none):
+                case (let .some(tl), .none):
                     stack.push(left, tNear: tl)
-                case let (.none, .some(tr)):
+                case (.none, let .some(tr)):
                     stack.push(right, tNear: tr)
                 case (.none, .none):
                     break
@@ -417,7 +424,10 @@ public struct CajuBVH: Sendable {
         return bestHit
     }
 
-    /// Conveniência sem pilha explícita (usa pilha *inline* sem alocação até profundidade 64).
+    /// Conveniência de `raycastFirst` sem pilha explícita.
+    ///
+    /// - Important: Aloca uma `CajuBVHTraversalStack` local a cada chamada (alocando em *heap*
+    ///   se a profundidade ultrapassar 64 níveis). No caminho quente, use ``raycastFirst(_:stack:)``.
     @inlinable
     public func raycastFirst(_ ray: CajuRay) -> CajuBVHRayHit? {
         var stack = CajuBVHTraversalStack()
@@ -426,6 +436,7 @@ public struct CajuBVH: Sendable {
 
     /// Visita todas as AABBs atingidas por `ray` (em ordem não especificada).
     ///
+    /// Variante recomendada para o caminho quente: reutiliza `stack` sem alocações de *heap* após aquecida.
     /// O *visitor* retorna `true` para continuar a travessia ou `false` para interromper imediatamente.
     @inlinable
     public func raycastAll(
@@ -464,6 +475,9 @@ public struct CajuBVH: Sendable {
     }
 
     /// Conveniência de `raycastAll` sem pilha explícita.
+    ///
+    /// - Important: Aloca uma `CajuBVHTraversalStack` local a cada chamada (alocando em *heap*
+    ///   se a profundidade ultrapassar 64 níveis). No caminho quente, use ``raycastAll(_:stack:visitor:)``.
     @inlinable
     public func raycastAll(_ ray: CajuRay, visitor: (CajuBVHRayHit) -> Bool) {
         var stack = CajuBVHTraversalStack()
@@ -471,6 +485,9 @@ public struct CajuBVH: Sendable {
     }
 
     /// Acrescenta todos os hits do raio em `results` (sem limpar o array antes).
+    ///
+    /// Variante recomendada para o caminho quente: reutiliza `stack` e a capacidade de `results`
+    /// sem alocações por consulta.
     @inlinable
     public func raycastAll(
         _ ray: CajuRay,
@@ -485,6 +502,7 @@ public struct CajuBVH: Sendable {
 
     /// Visita todos os proxies cuja AABB justa sobrepõe `aabb`.
     ///
+    /// Variante recomendada para o caminho quente: reutiliza `stack` sem alocações de *heap* após aquecida.
     /// O *visitor* retorna `true` para continuar ou `false` para interromper.
     @inlinable
     public func query(
@@ -519,6 +537,10 @@ public struct CajuBVH: Sendable {
     }
 
     /// Conveniência de `query(overlapping:)` sem pilha explícita.
+    ///
+    /// - Important: Aloca uma `CajuBVHTraversalStack` local a cada chamada (alocando em *heap*
+    ///   se a profundidade ultrapassar 64 níveis). No caminho quente, use
+    ///   ``query(overlapping:stack:visitor:)``.
     @inlinable
     public func query(overlapping aabb: CajuAABB, visitor: (CajuBVHProxy, UInt32) -> Bool) {
         var stack = CajuBVHTraversalStack()
@@ -526,6 +548,9 @@ public struct CajuBVH: Sendable {
     }
 
     /// Acrescenta em `results` os proxies cuja AABB justa sobrepõe `aabb`.
+    ///
+    /// Variante recomendada para o caminho quente: reutiliza `stack` e a capacidade de `results`
+    /// sem alocações por consulta.
     @inlinable
     public func query(
         overlapping aabb: CajuAABB,
@@ -539,6 +564,8 @@ public struct CajuBVH: Sendable {
     }
 
     /// Consulta de *shapecast* por esfera `(center, radius)` sobre as AABBs justas dos proxies.
+    ///
+    /// Variante recomendada para o caminho quente: reutiliza `stack` sem alocações de *heap* após aquecida.
     ///
     /// - Throws: `CajuSpatialError.nonFiniteInput` se `center` ou `radius` não forem finitos;
     ///   `CajuSpatialError.invalidRadius` se `radius < 0`.
@@ -583,6 +610,10 @@ public struct CajuBVH: Sendable {
     }
 
     /// Conveniência de *shapecast* por esfera sem pilha explícita.
+    ///
+    /// - Important: Aloca uma `CajuBVHTraversalStack` local a cada chamada (alocando em *heap*
+    ///   se a profundidade ultrapassar 64 níveis). No caminho quente, use
+    ///   ``shapecast(sphereCenter:radius:stack:visitor:)``.
     @inlinable
     public func shapecast(
         sphereCenter center: SIMD3<Float>,
@@ -595,6 +626,8 @@ public struct CajuBVH: Sendable {
 
     /// Consulta de *shapecast* por AABB varrida (*swept AABB*): testa `aabb` movendo-se
     /// linearmente por `displacement` (`t` em `0...1`) contra as AABBs justas da BVH.
+    ///
+    /// Variante recomendada para o caminho quente: reutiliza `stack` sem alocações de *heap* após aquecida.
     ///
     /// - Throws: `CajuSpatialError.nonFiniteInput` se `displacement` não for finito.
     @inlinable
@@ -647,6 +680,10 @@ public struct CajuBVH: Sendable {
     }
 
     /// Conveniência de *swept AABB cast* sem pilha explícita.
+    ///
+    /// - Important: Aloca uma `CajuBVHTraversalStack` local a cada chamada (alocando em *heap*
+    ///   se a profundidade ultrapassar 64 níveis). No caminho quente, use
+    ///   ``shapecast(swept:displacement:stack:visitor:)``.
     @inlinable
     public func shapecast(
         swept aabb: CajuAABB,
@@ -747,8 +784,7 @@ public struct CajuBVH: Sendable {
 
     @inlinable
     internal func validatedProxyIndex(_ proxy: CajuBVHProxy) throws(CajuSpatialError) -> Int {
-        let idx = Int(proxy.index)
-        guard idx >= 0, idx < proxies.count else {
+        guard let idx = Int(exactly: proxy.index), idx >= 0, idx < proxies.count else {
             throw .invalidHandle
         }
         let entry = proxies[idx]
@@ -944,7 +980,8 @@ public struct CajuBVH: Sendable {
                 rightCount += bins[i].count
                 let leftCount = leftCounts[i - 1]
                 if leftCount > 0 && rightCount > 0 {
-                    let cost = Float(leftCount) * leftBounds[i - 1].surfaceArea
+                    let cost =
+                        Float(leftCount) * leftBounds[i - 1].surfaceArea
                         + Float(rightCount) * rightBounds.surfaceArea
                     if cost < bestCost {
                         bestCost = cost

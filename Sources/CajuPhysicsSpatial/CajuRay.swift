@@ -80,6 +80,7 @@ public struct CajuRay: Sendable, Equatable, Hashable {
     /// - Returns: O `t` de entrada em `[tMin, min(tMax, tMaxLimit)]`, ou `nil` sem interseção.
     @inlinable
     public func intersect(_ aabb: CajuAABB, tMaxLimit: Float? = nil) -> Float? {
+        if let tMaxLimit, tMaxLimit.isNaN { return nil }
         let limit = tMaxLimit.map { Swift.min($0, tMax) } ?? tMax
         if tMin > limit { return nil }
         return intersectSlabs(aabb, tEnterInit: tMin, tExitInit: limit, exitSlack: 0)

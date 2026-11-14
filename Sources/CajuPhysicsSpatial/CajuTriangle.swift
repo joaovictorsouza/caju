@@ -97,6 +97,7 @@ public struct CajuTriangle: Sendable, Equatable, Hashable {
         guard allFinite(v0), allFinite(v1), allFinite(v2) else {
             return nil
         }
+        if let tMaxLimit, tMaxLimit.isNaN { return nil }
         let limit = tMaxLimit.map { Swift.min($0, ray.tMax) } ?? ray.tMax
         if ray.tMin > limit { return nil }
 

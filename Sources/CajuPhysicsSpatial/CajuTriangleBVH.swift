@@ -261,6 +261,8 @@ public struct CajuTriangleBVH: Sendable {
     // MARK: - Consultas
 
     /// Retorna o primeiro impacto de raio contra a malha (menor `t` em `[ray.tMin, ray.tMax]`), ou `nil`.
+    ///
+    /// Variante recomendada para o caminho quente: reutiliza `stack` sem alocações de *heap* após aquecida.
     @inlinable
     public func raycastFirst(
         _ ray: CajuRay,
@@ -270,12 +272,14 @@ public struct CajuTriangleBVH: Sendable {
         stack.reset()
         defer { stack.reset() }
         guard !nodes.isEmpty else { return nil }
-        guard let rootT = ray.intersectSlabs(
-            nodes[0].bounds,
-            tEnterInit: ray.tMin,
-            tExitInit: ray.tMax,
-            exitSlack: Self.aabbTraversalSlack
-        ) else {
+        guard
+            let rootT = ray.intersectSlabs(
+                nodes[0].bounds,
+                tEnterInit: ray.tMin,
+                tExitInit: ray.tMax,
+                exitSlack: Self.aabbTraversalSlack
+            )
+        else {
             return nil
         }
 
@@ -326,7 +330,7 @@ public struct CajuTriangleBVH: Sendable {
                 )
 
                 switch (tLeft, tRight) {
-                case let (.some(tl), .some(tr)):
+                case (let .some(tl), let .some(tr)):
                     if tl <= tr {
                         stack.push(right, tNear: tr)
                         stack.push(left, tNear: tl)
@@ -334,9 +338,9 @@ public struct CajuTriangleBVH: Sendable {
                         stack.push(left, tNear: tl)
                         stack.push(right, tNear: tr)
                     }
-                case let (.some(tl), .none):
+                case (let .some(tl), .none):
                     stack.push(left, tNear: tl)
-                case let (.none, .some(tr)):
+                case (.none, let .some(tr)):
                     stack.push(right, tNear: tr)
                 case (.none, .none):
                     break
@@ -347,6 +351,10 @@ public struct CajuTriangleBVH: Sendable {
     }
 
     /// Conveniência de `raycastFirst` sem pilha explícita.
+    ///
+    /// - Important: Aloca uma `CajuBVHTraversalStack` local a cada chamada (alocando em *heap*
+    ///   se a profundidade ultrapassar 64 níveis). No caminho quente, use
+    ///   ``raycastFirst(_:twoSided:stack:)``.
     @inlinable
     public func raycastFirst(_ ray: CajuRay, twoSided: Bool = true) -> CajuTriangleBVHHit? {
         var stack = CajuBVHTraversalStack()
@@ -354,6 +362,8 @@ public struct CajuTriangleBVH: Sendable {
     }
 
     /// Visita todos os triângulos atingidos por `ray` (em ordem não especificada).
+    ///
+    /// Variante recomendada para o caminho quente: reutiliza `stack` sem alocações de *heap* após aquecida.
     @inlinable
     public func raycastAll(
         _ ray: CajuRay,
@@ -364,12 +374,14 @@ public struct CajuTriangleBVH: Sendable {
         stack.reset()
         defer { stack.reset() }
         guard !nodes.isEmpty else { return }
-        guard ray.intersectSlabs(
-            nodes[0].bounds,
-            tEnterInit: ray.tMin,
-            tExitInit: ray.tMax,
-            exitSlack: Self.aabbTraversalSlack
-        ) != nil else {
+        guard
+            ray.intersectSlabs(
+                nodes[0].bounds,
+                tEnterInit: ray.tMin,
+                tExitInit: ray.tMax,
+                exitSlack: Self.aabbTraversalSlack
+            ) != nil
+        else {
             return
         }
 
@@ -416,6 +428,10 @@ public struct CajuTriangleBVH: Sendable {
     }
 
     /// Conveniência de `raycastAll` sem pilha explícita.
+    ///
+    /// - Important: Aloca uma `CajuBVHTraversalStack` local a cada chamada (alocando em *heap*
+    ///   se a profundidade ultrapassar 64 níveis). No caminho quente, use
+    ///   ``raycastAll(_:twoSided:stack:visitor:)``.
     @inlinable
     public func raycastAll(
         _ ray: CajuRay,
@@ -427,6 +443,9 @@ public struct CajuTriangleBVH: Sendable {
     }
 
     /// Acrescenta todos os hits do raio em `results`.
+    ///
+    /// Variante recomendada para o caminho quente: reutiliza `stack` e a capacidade de `results`
+    /// sem alocações por consulta.
     @inlinable
     public func raycastAll(
         _ ray: CajuRay,
@@ -441,6 +460,8 @@ public struct CajuTriangleBVH: Sendable {
     }
 
     /// Visita todos os índices de triângulos que sobrepõem exatamente `aabb` (via SAT).
+    ///
+    /// Variante recomendada para o caminho quente: reutiliza `stack` sem alocações de *heap* após aquecida.
     @inlinable
     public func query(
         overlapping aabb: CajuAABB,
@@ -479,6 +500,10 @@ public struct CajuTriangleBVH: Sendable {
     }
 
     /// Conveniência de `query(overlapping:)` sem pilha explícita.
+    ///
+    /// - Important: Aloca uma `CajuBVHTraversalStack` local a cada chamada (alocando em *heap*
+    ///   se a profundidade ultrapassar 64 níveis). No caminho quente, use
+    ///   ``query(overlapping:stack:visitor:)``.
     @inlinable
     public func query(overlapping aabb: CajuAABB, visitor: (UInt32) -> Bool) {
         var stack = CajuBVHTraversalStack()
@@ -486,6 +511,8 @@ public struct CajuTriangleBVH: Sendable {
     }
 
     /// Visita todos os índices de triângulos que sobrepõem a esfera `(center, radius)`.
+    ///
+    /// Variante recomendada para o caminho quente: reutiliza `stack` sem alocações de *heap* após aquecida.
     ///
     /// - Throws: `CajuSpatialError.nonFiniteInput` ou `CajuSpatialError.invalidRadius`.
     @inlinable
@@ -535,6 +562,10 @@ public struct CajuTriangleBVH: Sendable {
     }
 
     /// Conveniência de `query(overlappingSphereCenter:radius:)` sem pilha explícita.
+    ///
+    /// - Important: Aloca uma `CajuBVHTraversalStack` local a cada chamada (alocando em *heap*
+    ///   se a profundidade ultrapassar 64 níveis). No caminho quente, use
+    ///   ``query(overlappingSphereCenter:radius:stack:visitor:)``.
     @inlinable
     public func query(
         overlappingSphereCenter center: SIMD3<Float>,
@@ -701,7 +732,8 @@ public struct CajuTriangleBVH: Sendable {
                 rightCount += bins[i].count
                 let leftCount = leftCounts[i - 1]
                 if leftCount > 0 && rightCount > 0 {
-                    let cost = Float(leftCount) * leftBounds[i - 1].surfaceArea
+                    let cost =
+                        Float(leftCount) * leftBounds[i - 1].surfaceArea
                         + Float(rightCount) * rightBounds.surfaceArea
                     if cost < bestCost {
                         bestCost = cost
