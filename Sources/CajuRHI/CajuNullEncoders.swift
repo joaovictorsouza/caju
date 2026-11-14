@@ -59,54 +59,10 @@ public struct CajuNullCommandBuffer: CajuCommandBuffer, ~Copyable {
         pendingPresents += 1
     }
 
-    /// Regras de validação de um passe (as mesmas que um backend real precisa aplicar).
     private func validate(_ d: CajuRenderPassDescriptor) throws(CajuRHIError) {
-        guard d.colorAttachments.count <= device.capabilities.maxColorAttachments else {
-            throw .invalidDescriptor(.tooManyAttachments)
-        }
-        guard !d.colorAttachments.isEmpty || d.depthAttachment != nil else {
-            throw .invalidDescriptor(.emptyUsage)
-        }
-        var size: (Int, Int)?
-        var samples: Int?
-        func check(
-            _ t: CajuAttachmentTexture, load: CajuLoadAction, store: CajuStoreAction,
-            resolve: CajuAttachmentTexture?
-        ) throws(CajuRHIError) {
-            guard case .texture(let h) = t else {
-                if case .resource(let r) = t { throw .invalidFrameGraph(.unknownResource(index: r.index)) }
-                return
-            }
-            guard let td = device.textures.value(for: h) else {
-                throw .invalidHandle(index: h.index, generation: h.generation)
-            }
-            guard td.usage.contains(.renderTarget) else { throw .invalidDescriptor(.incompatibleUsage) }
-            if let size, size != (td.width, td.height) { throw .invalidUsage(.attachmentSizeMismatch) }
-            size = (td.width, td.height)
-            if let samples, samples != td.sampleCount { throw .invalidUsage(.attachmentSizeMismatch) }
-            samples = td.sampleCount
-            if td.storage == .memoryless {
-                if case .load = load { throw .invalidUsage(.memorylessMustNotPersist) }
-                switch store {
-                case .store, .storeAndResolve: throw .invalidUsage(.memorylessMustNotPersist)
-                case .dontCare, .resolve: break
-                }
-            }
-            switch store {
-            case .resolve, .storeAndResolve:
-                guard td.sampleCount > 1, let resolve, case .texture(let rh) = resolve,
-                    let rd = device.textures.value(for: rh), rd.sampleCount == 1,
-                    (rd.width, rd.height) == (td.width, td.height)
-                else { throw .invalidUsage(.resolveTargetNotSingleSample) }
-            case .store, .dontCare: break
-            }
-        }
-        for c in d.colorAttachments {
-            try check(c.texture, load: c.load, store: c.store, resolve: c.resolveTexture)
-        }
-        if let depth = d.depthAttachment {
-            try check(depth.texture, load: depth.load, store: depth.store, resolve: nil)
-        }
+        try CajuRenderPassValidator.validate(
+            d, maxColorAttachments: device.capabilities.maxColorAttachments,
+            lookup: { device.textures.value(for: $0) })
     }
 }
 
@@ -131,6 +87,14 @@ public struct CajuNullRenderEncoder: CajuRenderEncoder, ~Copyable {
 
     public mutating func setViewport(_ viewport: CajuViewport) { commands.append(.setViewport) }
     public mutating func setScissor(_ rect: CajuScissorRect) { commands.append(.setScissor) }
+
+    public mutating func setVertexBuffer(_ buffer: CajuBufferHandle, offset: Int, index: Int) {
+        guard device.buffers.value(for: buffer) != nil else {
+            fail(.invalidHandle(index: buffer.index, generation: buffer.generation))
+            return
+        }
+        commands.append(.setBuffer(index: index))
+    }
 
     public mutating func setBuffer(
         _ buffer: CajuBufferHandle, offset: Int, index: Int, stage: CajuShaderStage

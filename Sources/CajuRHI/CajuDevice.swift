@@ -20,6 +20,11 @@ public protocol CajuRenderEncoder: ~Copyable {
     mutating func setPipeline(_ pipeline: CajuRenderPipelineHandle)
     mutating func setViewport(_ viewport: CajuViewport)
     mutating func setScissor(_ rect: CajuScissorRect)
+    /// Fluxo de vértices. `index` é o `bufferIndex` de `CajuVertexBufferLayout`: espaço de índices próprio,
+    /// separado dos buffers de uniforme/storage de `setBuffer` (o backend Metal mapeia o fluxo `i` para a
+    /// posição `30 - i` da tabela de argumentos; o Vulkan usa o binding `i`).
+    mutating func setVertexBuffer(_ buffer: CajuBufferHandle, offset: Int, index: Int)
+    /// Buffer de uniforme/storage no estágio dado; `index` é o `[[buffer(n)]]` / `binding = n` do shader.
     mutating func setBuffer(_ buffer: CajuBufferHandle, offset: Int, index: Int, stage: CajuShaderStage)
     /// Dados pequenos inline (constantes por draw, até 4 KB), sem criar buffer.
     mutating func setBytes(_ bytes: UnsafeRawBufferPointer, index: Int, stage: CajuShaderStage)
