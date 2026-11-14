@@ -1,15 +1,18 @@
 import CajuMath
 
-/// Raio paramétrico `origin + t * direction` com intervalo válido `[tMin, tMax]`.
+/// Consulta de raio paramétrico `origin + t * direction` com intervalo `[tMin, tMax]`
+/// e `inverseDirection` pré-calculado para travessia rápida de BVH.
 ///
-/// Todos os campos são validados na construção: valores `NaN`/infinito, direção nula e
-/// intervalos inválidos (`tMin < 0` ou `tMin > tMax`) são rejeitados com `CajuSpatialError`.
+/// Construível a partir de `CajuRay` (`CajuMath`) ou diretamente por origem e direção.
+/// Valores `NaN`/infinito, direção nula e intervalos inválidos (`tMin < 0` ou `tMin > tMax`)
+/// são rejeitados com `CajuSpatialError`.
 ///
 /// ```swift
-/// let ray = try CajuRay(origin: SIMD3(0, 0, -5), direction: SIMD3(0, 0, 1))
-/// let t = ray.intersect(try CajuAABB(min: SIMD3(-1, -1, -1), max: SIMD3(1, 1, 1)))
+/// let mathRay = CajuRay(origin: CajuVec3(0, 0, -5), direction: CajuVec3(0, 0, 1))
+/// let query = try CajuRayQuery(ray: mathRay)
+/// let t = query.intersect(CajuAABB(min: CajuVec3(-1, -1, -1), max: CajuVec3(1, 1, 1)))
 /// ```
-public struct CajuRay: Sendable, Equatable, Hashable {
+public struct CajuRayQuery: Sendable, BitwiseCopyable, Equatable, Hashable {
     /// Origem do raio.
     public let origin: SIMD3<Float>
 
@@ -25,7 +28,27 @@ public struct CajuRay: Sendable, Equatable, Hashable {
     /// Limite superior do parâmetro `t` (`>= tMin`).
     public let tMax: Float
 
-    /// Cria um raio validado.
+    /// Cria uma consulta de raio validada a partir de um `CajuRay` de `CajuMath`.
+    ///
+    /// - Throws:
+    ///   - `CajuSpatialError.nonFiniteRay` se origem, direção, `tMin` ou `tMax` não forem finitos.
+    ///   - `CajuSpatialError.invalidRayDirection` se `ray.direction` for `(0, 0, 0)`.
+    ///   - `CajuSpatialError.invalidRayRange` se `tMin < 0` ou `tMin > tMax`.
+    @inlinable
+    public init(
+        ray: CajuRay,
+        tMin: Float = 0,
+        tMax: Float = .greatestFiniteMagnitude
+    ) throws(CajuSpatialError) {
+        try self.init(
+            origin: ray.origin.storage,
+            direction: ray.direction.storage,
+            tMin: tMin,
+            tMax: tMax
+        )
+    }
+
+    /// Cria uma consulta de raio validada a partir de `SIMD3<Float>`.
     ///
     /// - Throws:
     ///   - `CajuSpatialError.nonFiniteRay` se `origin`, `direction`, `tMin` ou `tMax` não forem finitos.
@@ -54,7 +77,7 @@ public struct CajuRay: Sendable, Equatable, Hashable {
         self.tMax = tMax
     }
 
-    /// Cria um raio validado a partir de `CajuVec3`.
+    /// Cria uma consulta de raio validada a partir de `CajuVec3`.
     ///
     /// - Throws: Os mesmos erros de `init(origin:direction:tMin:tMax:)` com `SIMD3<Float>`.
     @inlinable
@@ -77,16 +100,18 @@ public struct CajuRay: Sendable, Equatable, Hashable {
     /// caixas de volume zero e origem interna à caixa.
     ///
     /// - Parameter tMaxLimit: Teto opcional para `t` (é limitado por `self.tMax`).
-    /// - Returns: O `t` de entrada em `[tMin, min(tMax, tMaxLimit)]`, ou `nil` sem interseção.
+    /// - Returns: O `t` de entrada em `[tMin, min(tMax, tMaxLimit)]`, ou `nil` sem interseção ou se `aabb` for inválida.
     @inlinable
     public func intersect(_ aabb: CajuAABB, tMaxLimit: Float? = nil) -> Float? {
+        guard isValidAABB(aabb) else { return nil }
         if let tMaxLimit, tMaxLimit.isNaN { return nil }
         let limit = tMaxLimit.map { Swift.min($0, tMax) } ?? tMax
         if tMin > limit { return nil }
         return intersectSlabs(aabb, tEnterInit: tMin, tExitInit: limit, exitSlack: 0)
     }
 
-    /// Núcleo *slab* compartilhado; `exitSlack` permite folga de alguns ULPs na travessia interna da BVH de triângulos.
+    /// Núcleo *slab* compartilhado para AABBs já validadas; `exitSlack` permite folga de alguns ULPs
+    /// na travessia interna da BVH de triângulos.
     @inlinable
     internal func intersectSlabs(
         _ aabb: CajuAABB,

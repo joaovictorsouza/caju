@@ -10,9 +10,17 @@ private func closeRelative(_ a: Float, _ b: Float, tolerance: Float = relToleran
     abs(a - b) <= tolerance * max(1.0, abs(a), abs(b))
 }
 
+private func makeAABB(_ min: SIMD3<Float>, _ max: SIMD3<Float>) -> CajuAABB {
+    CajuAABB(min: CajuVec3(storage: min), max: CajuVec3(storage: max))
+}
+
+private func makeSphere(_ center: SIMD3<Float>, _ radius: Float) -> CajuSphere {
+    CajuSphere(center: CajuVec3(storage: center), radius: radius)
+}
+
 /// Oráculo independente em precisão dupla (`Double`) para interseção raio-triângulo.
 private func doubleRayTriangle(
-    ray: CajuRay,
+    ray: CajuRayQuery,
     tri: CajuTriangle,
     twoSided: Bool
 ) -> (hit: Bool, nearBoundary: Bool, t: Float, u: Float, v: Float) {
@@ -78,17 +86,17 @@ private func doubleRayTriangle(
 struct CajuPhysicsSpatialTriangleTests {
     @Test func triangleMollerTrumboreAnalyticalAndDegenerate() throws {
         let tri = CajuTriangle(CajuVec3(0, 0, 0), CajuVec3(2, 0, 0), CajuVec3(0, 2, 0))
-        #expect(tri.bounds == (try CajuAABB(min: SIMD3<Float>(0, 0, 0), max: SIMD3<Float>(2, 2, 0))))
+        #expect(tri.bounds == makeAABB(SIMD3<Float>(0, 0, 0), SIMD3<Float>(2, 2, 0)))
 
         // Normal é +Z (CCW). Raio vindo de +Z em direção -Z atinge a frente (twoSided == false aceita).
-        let frontRay = try CajuRay(origin: SIMD3<Float>(0.5, 0.5, 3), direction: SIMD3<Float>(0, 0, -1))
+        let frontRay = try CajuRayQuery(origin: SIMD3<Float>(0.5, 0.5, 3), direction: SIMD3<Float>(0, 0, -1))
         let frontHit = try #require(tri.intersect(ray: frontRay, twoSided: false))
         #expect(closeRelative(frontHit.t, 3))
         #expect(closeRelative(frontHit.u, 0.25))
         #expect(closeRelative(frontHit.v, 0.25))
 
         // Raio vindo de -Z em direção +Z atinge o verso: descartado com twoSided: false, aceito com true.
-        let backRay = try CajuRay(origin: SIMD3<Float>(0.5, 0.5, -2), direction: SIMD3<Float>(0, 0, 1))
+        let backRay = try CajuRayQuery(origin: SIMD3<Float>(0.5, 0.5, -2), direction: SIMD3<Float>(0, 0, 1))
         #expect(tri.intersect(ray: backRay, twoSided: false) == nil)
         let backHit = try #require(tri.intersect(ray: backRay, twoSided: true))
         #expect(closeRelative(backHit.t, 2))
@@ -96,13 +104,13 @@ struct CajuPhysicsSpatialTriangleTests {
         #expect(closeRelative(backHit.v, 0.25))
 
         // Toque exato em vértice e aresta.
-        let vertexRay = try CajuRay(origin: SIMD3<Float>(0, 0, -1), direction: SIMD3<Float>(0, 0, 1))
+        let vertexRay = try CajuRayQuery(origin: SIMD3<Float>(0, 0, -1), direction: SIMD3<Float>(0, 0, 1))
         let vertexHit = try #require(tri.intersect(ray: vertexRay))
         #expect(closeRelative(vertexHit.t, 1))
         #expect(closeRelative(vertexHit.u, 0))
         #expect(closeRelative(vertexHit.v, 0))
 
-        let edgeRay = try CajuRay(origin: SIMD3<Float>(1, 1, -1), direction: SIMD3<Float>(0, 0, 1))
+        let edgeRay = try CajuRayQuery(origin: SIMD3<Float>(1, 1, -1), direction: SIMD3<Float>(0, 0, 1))
         let edgeHit = try #require(tri.intersect(ray: edgeRay))
         #expect(closeRelative(edgeHit.u + edgeHit.v, 1))
 
@@ -110,7 +118,7 @@ struct CajuPhysicsSpatialTriangleTests {
         #expect(tri.intersect(ray: frontRay, tMaxLimit: 2.99) == nil)
         #expect(tri.intersect(ray: frontRay, tMaxLimit: 3.0) != nil)
         #expect(tri.intersect(ray: frontRay, tMaxLimit: .nan) == nil)
-        let pastOrigin = try CajuRay(
+        let pastOrigin = try CajuRayQuery(
             origin: SIMD3<Float>(0.5, 0.5, 3),
             direction: SIMD3<Float>(0, 0, -1),
             tMin: 3.1,
@@ -121,7 +129,7 @@ struct CajuPhysicsSpatialTriangleTests {
         // Triângulos degenerados nunca geram hit.
         let coincident = CajuTriangle(SIMD3<Float>(1, 1, 1), SIMD3<Float>(1, 1, 1), SIMD3<Float>(1, 1, 1))
         let collinear = CajuTriangle(SIMD3<Float>(0, 0, 0), SIMD3<Float>(1, 0, 0), SIMD3<Float>(2, 0, 0))
-        let testRay = try CajuRay(origin: SIMD3<Float>(1, 0, -1), direction: SIMD3<Float>(0, 0, 1))
+        let testRay = try CajuRayQuery(origin: SIMD3<Float>(1, 0, -1), direction: SIMD3<Float>(0, 0, 1))
         #expect(coincident.intersect(ray: testRay) == nil)
         #expect(collinear.intersect(ray: testRay) == nil)
 
@@ -138,11 +146,15 @@ struct CajuPhysicsSpatialTriangleTests {
             SIMD3<Float>(2, 0, 0),
             SIMD3<Float>(0, 2, 0)
         )
-        let cornerBox = try CajuAABB(min: SIMD3<Float>(0, 0, 0), max: SIMD3<Float>(0.5, 0.5, 0.5))
+        let cornerBox = makeAABB(SIMD3<Float>(0, 0, 0), SIMD3<Float>(0.5, 0.5, 0.5))
         #expect(!tilted.overlaps(cornerBox))
 
-        let touchingBox = try CajuAABB(min: SIMD3<Float>(0, 0, 0), max: SIMD3<Float>(1, 1, 1))
+        let touchingBox = makeAABB(SIMD3<Float>(0, 0, 0), SIMD3<Float>(1, 1, 1))
         #expect(tilted.overlaps(touchingBox))
+
+        // AABBs inválidas retornam false em overlaps.
+        #expect(!tilted.overlaps(makeAABB(SIMD3<Float>(.nan, 0, 0), SIMD3<Float>(1, 1, 1))))
+        #expect(!tilted.overlaps(makeAABB(SIMD3<Float>(2, 0, 0), SIMD3<Float>(1, 1, 1))))
 
         // Separação por eixo de produto vetorial (arestas inclinadas cruzando sem intersecção).
         let crossTri = CajuTriangle(
@@ -150,10 +162,10 @@ struct CajuPhysicsSpatialTriangleTests {
             SIMD3<Float>(1.5, -1, 0.5),
             SIMD3<Float>(1.5, -1, -0.5)
         )
-        let centerBox = try CajuAABB(min: SIMD3<Float>(-0.2, -0.2, -0.2), max: SIMD3<Float>(0.2, 0.2, 0.2))
+        let centerBox = makeAABB(SIMD3<Float>(-0.2, -0.2, -0.2), SIMD3<Float>(0.2, 0.2, 0.2))
         #expect(!crossTri.overlaps(centerBox))
 
-        // Regiões de Voronoi em closestPoint e overlapsSphere.
+        // Regiões de Voronoi em closestPoint e overlaps(sphere).
         let tri = CajuTriangle(SIMD3<Float>(0, 0, 0), SIMD3<Float>(2, 0, 0), SIMD3<Float>(0, 2, 0))
         #expect(tri.closestPoint(to: SIMD3<Float>(-1, -1, 0)) == SIMD3<Float>(0, 0, 0))
         #expect(tri.closestPoint(to: SIMD3<Float>(3, -1, 0)) == SIMD3<Float>(2, 0, 0))
@@ -163,11 +175,11 @@ struct CajuPhysicsSpatialTriangleTests {
         #expect(tri.closestPoint(to: SIMD3<Float>(2, 2, 0)) == SIMD3<Float>(1, 1, 0))
         #expect(tri.closestPoint(to: SIMD3<Float>(0.5, 0.5, 4)) == SIMD3<Float>(0.5, 0.5, 0))
 
-        #expect(tri.overlapsSphere(center: SIMD3<Float>(0.5, 0.5, 1), radius: 1))
-        #expect(!tri.overlapsSphere(center: SIMD3<Float>(0.5, 0.5, 1.01), radius: 1))
-        #expect(tri.overlapsSphere(center: SIMD3<Float>(0.5, 0.5, 0), radius: 0))
-        #expect(!tri.overlapsSphere(center: SIMD3<Float>(0.5, 0.5, 0), radius: -1))
-        #expect(!tri.overlapsSphere(center: SIMD3<Float>(.nan, 0, 0), radius: 1))
+        #expect(tri.overlaps(makeSphere(SIMD3<Float>(0.5, 0.5, 1), 1)))
+        #expect(!tri.overlaps(makeSphere(SIMD3<Float>(0.5, 0.5, 1.01), 1)))
+        #expect(tri.overlaps(makeSphere(SIMD3<Float>(0.5, 0.5, 0), 0)))
+        #expect(!tri.overlaps(makeSphere(SIMD3<Float>(0.5, 0.5, 0), -1)))
+        #expect(!tri.overlaps(makeSphere(SIMD3<Float>(.nan, 0, 0), 1)))
 
         // Fallback degenerado em closestPoint.
         let deg = CajuTriangle(SIMD3<Float>(0, 0, 0), SIMD3<Float>(2, 0, 0), SIMD3<Float>(4, 0, 0))
@@ -182,7 +194,7 @@ struct CajuPhysicsSpatialTriangleTests {
         #expect(empty.triangle(at: 0) == nil)
         #expect(empty.validate())
 
-        let ray = try CajuRay(origin: SIMD3<Float>(0, 0, -5), direction: SIMD3<Float>(0, 0, 1))
+        let ray = try CajuRayQuery(origin: SIMD3<Float>(0, 0, -5), direction: SIMD3<Float>(0, 0, 1))
         #expect(empty.raycastFirst(ray) == nil)
 
         var emptyStack = CajuBVHTraversalStack()
@@ -190,16 +202,16 @@ struct CajuPhysicsSpatialTriangleTests {
         empty.raycastAll(ray, into: &emptyRayHits, stack: &emptyStack)
         #expect(emptyRayHits.isEmpty)
 
-        let emptyQueryBox = try CajuAABB(min: SIMD3<Float>(-1, -1, -1), max: SIMD3<Float>(1, 1, 1))
+        let emptyQueryBox = makeAABB(SIMD3<Float>(-1, -1, -1), SIMD3<Float>(1, 1, 1))
         var emptyBoxCount = 0
-        empty.query(overlapping: emptyQueryBox) { _ in
+        try empty.query(overlapping: emptyQueryBox) { _ in
             emptyBoxCount += 1
             return true
         }
         #expect(emptyBoxCount == 0)
 
         var emptySphereCount = 0
-        try empty.query(overlappingSphereCenter: .zero, radius: 5) { _ in
+        try empty.query(overlapping: makeSphere(.zero, 5)) { _ in
             emptySphereCount += 1
             return true
         }
@@ -280,19 +292,29 @@ struct CajuPhysicsSpatialTriangleTests {
         #expect(bvhA.triangle(at: -1) == nil)
         #expect(bvhA.triangle(at: 2) == nil)
 
-        let hitRay = try CajuRay(origin: SIMD3<Float>(0.2, 0.2, -1), direction: SIMD3<Float>(0, 0, 1))
+        let hitRay = try CajuRayQuery(origin: SIMD3<Float>(0.2, 0.2, -1), direction: SIMD3<Float>(0, 0, 1))
         #expect(bvhA.raycastFirst(hitRay) == bvhB.raycastFirst(hitRay))
         #expect(bvhA.raycastFirst(hitRay) == bvhC.raycastFirst(hitRay))
 
-        // Erros na consulta por esfera e parada antecipada de visitors.
-        #expect(throws: CajuSpatialError.nonFiniteInput) {
-            try bvhA.query(overlappingSphereCenter: SIMD3<Float>(.nan, 0, 0), radius: 1) { _ in true }
+        // Erros na consulta por esfera e AABB inválida, além de parada antecipada de visitors.
+        #expect(throws: CajuSpatialError.nonFiniteBounds) {
+            try bvhA.query(overlapping: makeAABB(SIMD3<Float>(.nan, 0, 0), SIMD3<Float>(1, 1, 1))) { _ in
+                true
+            }
+        }
+        #expect(throws: CajuSpatialError.invalidBounds) {
+            try bvhA.query(overlapping: makeAABB(SIMD3<Float>(2, 0, 0), SIMD3<Float>(1, 1, 1))) { _ in
+                true
+            }
         }
         #expect(throws: CajuSpatialError.nonFiniteInput) {
-            try bvhA.query(overlappingSphereCenter: .zero, radius: .infinity) { _ in true }
+            try bvhA.query(overlapping: makeSphere(SIMD3<Float>(.nan, 0, 0), 1)) { _ in true }
+        }
+        #expect(throws: CajuSpatialError.nonFiniteInput) {
+            try bvhA.query(overlapping: makeSphere(.zero, .infinity)) { _ in true }
         }
         #expect(throws: CajuSpatialError.invalidRadius) {
-            try bvhA.query(overlappingSphereCenter: .zero, radius: -0.1) { _ in true }
+            try bvhA.query(overlapping: makeSphere(.zero, -0.1)) { _ in true }
         }
 
         // Muitos triângulos idênticos + early-stop em visitors.
@@ -311,15 +333,15 @@ struct CajuPhysicsSpatialTriangleTests {
         #expect(rayCount == 1)
 
         var overlapCount = 0
-        let allBox = try CajuAABB(min: SIMD3<Float>(-1, -1, -1), max: SIMD3<Float>(2, 2, 2))
-        identicalBVH.query(overlapping: allBox) { _ in
+        let allBox = makeAABB(SIMD3<Float>(-1, -1, -1), SIMD3<Float>(2, 2, 2))
+        try identicalBVH.query(overlapping: allBox) { _ in
             overlapCount += 1
             return false
         }
         #expect(overlapCount == 1)
 
         var sphereCount = 0
-        try identicalBVH.query(overlappingSphereCenter: .zero, radius: 3) { _ in
+        try identicalBVH.query(overlapping: makeSphere(.zero, 3)) { _ in
             sphereCount += 1
             return false
         }
@@ -339,7 +361,7 @@ struct CajuPhysicsSpatialTriangleTests {
         #expect(singleBVH.validate())
         #expect(singleBVH.triangleCount == 1)
 
-        let ray = try CajuRay(origin: SIMD3<Float>(0.5, 0.5, -2), direction: SIMD3<Float>(0, 0, 1))
+        let ray = try CajuRayQuery(origin: SIMD3<Float>(0.5, 0.5, -2), direction: SIMD3<Float>(0, 0, 1))
         let singleFirst = try #require(singleBVH.raycastFirst(ray))
         #expect(singleFirst.triangleIndex == 0)
         #expect(closeRelative(singleFirst.t, 2))
@@ -351,16 +373,16 @@ struct CajuPhysicsSpatialTriangleTests {
         }
         #expect(singleAll == [0])
 
-        let box = try CajuAABB(min: SIMD3<Float>(0, 0, -1), max: SIMD3<Float>(1, 1, 1))
+        let box = makeAABB(SIMD3<Float>(0, 0, -1), SIMD3<Float>(1, 1, 1))
         var singleBox: [UInt32] = []
-        singleBVH.query(overlapping: box) { idx in
+        try singleBVH.query(overlapping: box) { idx in
             singleBox.append(idx)
             return true
         }
         #expect(singleBox == [0])
 
         var singleSphere: [UInt32] = []
-        try singleBVH.query(overlappingSphereCenter: SIMD3<Float>(0.5, 0.5, 0.5), radius: 0.6) { idx in
+        try singleBVH.query(overlapping: makeSphere(SIMD3<Float>(0.5, 0.5, 0.5), 0.6)) { idx in
             singleSphere.append(idx)
             return true
         }
@@ -374,23 +396,23 @@ struct CajuPhysicsSpatialTriangleTests {
         let degBVH = try CajuTriangleBVH(positions: degPositions, indices: [0, 1, 2, 3, 4, 5])
         #expect(degBVH.validate())
 
-        let degRay = try CajuRay(origin: SIMD3<Float>(1, 0, -1), direction: SIMD3<Float>(0, 0, 1))
+        let degRay = try CajuRayQuery(origin: SIMD3<Float>(1, 0, -1), direction: SIMD3<Float>(0, 0, 1))
         #expect(degBVH.raycastFirst(degRay) == nil)
         var degAll: [CajuTriangleBVHHit] = []
         var stack = CajuBVHTraversalStack()
         degBVH.raycastAll(degRay, into: &degAll, stack: &stack)
         #expect(degAll.isEmpty)
 
-        let degQueryBox = try CajuAABB(min: SIMD3<Float>(0.5, -0.5, -0.5), max: SIMD3<Float>(1.5, 0.5, 0.5))
+        let degQueryBox = makeAABB(SIMD3<Float>(0.5, -0.5, -0.5), SIMD3<Float>(1.5, 0.5, 0.5))
         var degBoxHits: [UInt32] = []
-        degBVH.query(overlapping: degQueryBox, stack: &stack) { idx in
+        try degBVH.query(overlapping: degQueryBox, stack: &stack) { idx in
             degBoxHits.append(idx)
             return true
         }
         #expect(degBoxHits == [0])
 
         var degSphereHits: [UInt32] = []
-        try degBVH.query(overlappingSphereCenter: SIMD3<Float>(5, 5, 5), radius: 0.1, stack: &stack) { idx in
+        try degBVH.query(overlapping: makeSphere(SIMD3<Float>(5, 5, 5), 0.1), stack: &stack) { idx in
             degSphereHits.append(idx)
             return true
         }
@@ -409,7 +431,7 @@ struct CajuPhysicsSpatialTriangleTests {
         let bvh = try CajuTriangleBVH(positions: triPositions, indices: [0, 1, 2])
         let dz: Float = 0.7
         let exactT = (zPlane - 1.0) / dz
-        let ray = try CajuRay(
+        let ray = try CajuRayQuery(
             origin: SIMD3<Float>(0.2, 0.2, 1.0),
             direction: SIMD3<Float>(0, 0, dz),
             tMin: 0,
@@ -461,7 +483,7 @@ struct CajuPhysicsSpatialTriangleTests {
                 )
             var dir = target - origin
             if dir == .zero { dir = SIMD3<Float>(0, 0, 1) }
-            let ray = try CajuRay(
+            let ray = try CajuRayQuery(
                 origin: origin,
                 direction: dir,
                 tMin: 0,
@@ -550,7 +572,7 @@ struct CajuPhysicsSpatialTriangleTests {
                     rng.nextFloat(in: -4...4)
                 )
             if dir == .zero { dir = SIMD3<Float>(1, 0, 0) }
-            let ray = try CajuRay(
+            let ray = try CajuRayQuery(
                 origin: origin,
                 direction: dir,
                 tMin: rng.nextUInt32() % 4 == 0 ? rng.nextFloat(in: 0.05...0.5) : 0,
@@ -558,9 +580,9 @@ struct CajuPhysicsSpatialTriangleTests {
             )
             let twoSided = (i & 1) == 0
 
-            var bruteHits: [UInt32: CajuTriangleHit] = [:]
+            var bruteHits: [UInt32: CajuRayTriangleHit] = [:]
             var bruteBestIdx: UInt32?
-            var bruteBestHit: CajuTriangleHit?
+            var bruteBestHit: CajuRayTriangleHit?
             var bruteSecondT = Float.greatestFiniteMagnitude
 
             for idx in 0..<triangles.count {
@@ -611,9 +633,9 @@ struct CajuPhysicsSpatialTriangleTests {
                 rng.nextFloat(in: -22...22),
                 rng.nextFloat(in: -22...22)
             )
-            let qBox = try CajuAABB(
-                min: qMin,
-                max: qMin
+            let qBox = makeAABB(
+                qMin,
+                qMin
                     + SIMD3<Float>(
                         rng.nextFloat(in: 0.2...6),
                         rng.nextFloat(in: 0.2...6),
@@ -625,7 +647,7 @@ struct CajuPhysicsSpatialTriangleTests {
                 expectedBox.insert(UInt32(idx))
             }
             var actualBox = Set<UInt32>()
-            bvh.query(overlapping: qBox, stack: &stack) { triIdx in
+            try bvh.query(overlapping: qBox, stack: &stack) { triIdx in
                 actualBox.insert(triIdx)
                 return true
             }
@@ -638,13 +660,14 @@ struct CajuPhysicsSpatialTriangleTests {
                 rng.nextFloat(in: -22...22)
             )
             let sRadius = rng.nextFloat(in: 0.2...6.0)
+            let sphere = makeSphere(sCenter, sRadius)
             var expectedSphere = Set<UInt32>()
             for idx in 0..<triangles.count
-            where triangles[idx].overlapsSphere(center: sCenter, radius: sRadius) {
+            where triangles[idx].overlaps(sphere) {
                 expectedSphere.insert(UInt32(idx))
             }
             var actualSphere = Set<UInt32>()
-            try bvh.query(overlappingSphereCenter: sCenter, radius: sRadius, stack: &stack) { triIdx in
+            try bvh.query(overlapping: sphere, stack: &stack) { triIdx in
                 actualSphere.insert(triIdx)
                 return true
             }
