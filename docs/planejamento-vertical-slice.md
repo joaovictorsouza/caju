@@ -6,7 +6,10 @@
 
 ### Decisões do dono (2026-11-15)
 1. **O slice vive em repositório privado próprio** (sugestão: `joaovictorsouza/caju-vertical-slice`), não no Caju. **Não entram** alvos no `Package.swift` do Caju (`CajuSliceGame`/`CajuVerticalSlice` foram retirados deste plano); o slice consome o Caju como dependência SwiftPM.
-2. **Só o essencial agora, o resto por fases.** Expressões faciais (morph targets) ficam numa fase posterior; as fatias abaixo estão divididas em **Fase 1 (essencial)** e fases seguintes.
+2. **Prioridades do `resortclient` (confirmadas):** sala, câmera, toque, avatar andando e loja com saldo.
+3. **Shader toon fica para depois;** o slice inicial usa **cor chapada** (`materials.json`).
+4. **Assets do pacote Rukha93 e Mixamo:** ficam **só no repositório privado**; o dono não os redistribuirá. Podem ser commitados lá (nunca no Caju).
+5. **Só o essencial agora, o resto por fases; tudo que exigir algo já planejado para fases futuras migra para elas.** Expressões faciais (morph targets) ficam numa fase posterior; as fatias abaixo estão divididas em **Fase 1 (essencial)** e fases seguintes.
 
 ### Objetivo e interpretação
 O dono pediu para usar `resortclient` (Rust + Bevy 0.19 + Avian 0.7, Resort Game) e `toon-characters-bevy` (protótipo Bevy 0.20 de personagem toon modular) como **referência e fonte de assets** do vertical slice da engine, **sem servidor** (tudo local). Interpretação adotada: este documento **planeja e prepara um slice incremental**, que será portado fatia a fatia conforme as trilhas da Onda 1 fecham. Nada é portado agora.
@@ -59,7 +62,7 @@ Rust, Cargo workspace (`protocol`, `nakama_client`, `game`, `toon_avatar`, `anim
 - **Fonte Inter** (OFL, com `OFL.txt`): pode ir ao repositório com o arquivo de licença. **Ícones Phosphor** (MIT `(?)`, conferir): idem, com aviso.
 - **Som da loja**: gerado por script no `resortclient`; o slice gera o seu (tom sintético) e não depende de arquivo de terceiros.
 
-**Consequência (regra proposta):** os assets do pacote **nunca entram no Git do Caju** (MIT, público). O repositório privado do slice **pode** guardá-los **se** a licença permitir uso privado, o que **não consegui confirmar**: os textos do projeto dizem só "licença limitada" e o protótipo já os guarda num repositório privado. Conferir os termos do pacote (e do Mixamo) com o dono antes do primeiro commit de assets. Até lá, a regra segura é: pasta local fora do Git (`CAJU_SLICE_ASSETS`, no `.gitignore`) e **CI do Caju só com assets sintéticos** (esqueleto de poucos joints e malha gerados por código), o que as trilhas A-1/AN-1/R-1 já precisam para testar headless.
+**Consequência (regra proposta):** os assets do pacote **nunca entram no Git do Caju** (MIT, público). O repositório privado do slice **pode** guardá-los **se** a licença permitir uso privado, o que **não pude ler os termos**: os textos do projeto dizem só "licença limitada". O dono decidiu (2026-11-15) que os pacotes ficam só no repositório privado e não serão redistribuídos, então podem ser commitados lá. Regra: pasta local fora do Git (`CAJU_SLICE_ASSETS`, no `.gitignore`) e **CI do Caju só com assets sintéticos** (esqueleto de poucos joints e malha gerados por código), o que as trilhas A-1/AN-1/R-1 já precisam para testar headless.
 
 ## 2. Mapeamento: feature → trilha → o que dá hoje
 
@@ -112,7 +115,7 @@ Convenção: cada fatia termina com um **teste headless** e, quando houver tela,
 ### 3.1 Fases e fatias (em ordem)
 Decisão do dono: **só o essencial agora, o resto em fases seguintes.**
 - **Fase 1 (essencial, até o M4):** F0 a F6 e F8 (sala, câmera, toque, avatar animado e vestido com cor chapada, HUD e loja, medição). F7 reduz-se ao som de compra.
-- **Fase 2 (depois do M4):** shader toon por máscara (se não vier antes), sombra e parede translúcida, móveis/construção.
+- **Fase 2 (depois do M4):** shader toon por máscara (R-1 com material customizado), sombra e parede translúcida, móveis/construção.
 - **Fase 3:** **expressões faciais** (morph targets: parser, R-1b, AN-1, piscar e 6 expressões), pet, LOD/atlas, criador de personagem.
 
 Duas faixas independentes (mundo e UI) que se encontram na F8.
@@ -153,7 +156,7 @@ Princípio: **a lógica do jogo fala com um protocolo `SliceBackend`** (Swift), 
 Observação de licença: os arquivos de `contract/` são do projeto do dono e podem ser copiados como fixtures; **os do pacote de personagens, não** (§1.3).
 
 ## 5. Riscos
-1. **Licença do pacote de personagens** (§1.3): vazar assets para o Git do Caju seria violação; guardá-los até no repositório privado depende dos termos, **não confirmados**. Mitigação: CI do Caju só com sintéticos; no slice, conferir a licença antes de commitar.
+1. **Licença do pacote de personagens** (§1.3): vazar assets para o Git do Caju seria violação; o repositório privado é o único destino permitido (decisão do dono). Mitigação: CI do Caju só com sintéticos; repositório do slice mantido privado.
 2. **Sem cor sem o shader toon**: as texturas são máscaras RGB, não albedo. Sem o shader (ou o fallback de cor chapada) o personagem aparece cinza/errado. Decisão de escopo da R-1.
 3. **`.basis` ≠ KTX2**: o `CajuAssetsCore` lê KTX2, e o pacote traz Basis UASTC. Opções: usar PNG até a T-1 converter (A-2 e T-1 pendentes), ou converter offline para KTX2/ASTC. Um transcodificador Basis é dependência C dedicada (ADR 0017); o slice **não deve depender** dele.
 4. **Parser glTF sem skins/animações/morph/material** (§2.1): se não entrar na A-1, a F3/F4 ficam bloqueadas.
@@ -166,10 +169,10 @@ Observação de licença: os arquivos de `contract/` são do projeto do dono e p
 11. **Versões**: o `resortclient` usa Bevy 0.19 e o `toon-characters-bevy` 0.20; os números de desempenho do protótipo **não são comparáveis** com os do Caju. Servem como referência de intenção, não como meta.
 
 ## 6. Perguntas para o dono
-1. **Prioridade dentro do `resortclient`**: confirmar o recorte do slice (sala + câmera + toque + avatar andando + loja com saldo). Algo a mais é prioridade (móveis e construção? pet? criador de personagem?) ou algo do recorte pode sair (som, loja)?
-2. **Visual do personagem**: o slice exige o **shader toon** (e a R-1 ganha material customizado) ou aceita **cor chapada** até depois do M4?
+1. ~~Prioridade~~: respondido, sala, câmera, toque, avatar andando e loja com saldo.
+2. ~~Visual do personagem~~: respondido, cor chapada no slice inicial; shader toon na Fase 2.
 3. ~~Expressões~~: respondido, ficam para a Fase 3 (cabeça estática `lod2` até lá).
-4. **Licença**: o pacote Rukha93 (e o Mixamo) pode ficar num repositório **privado**? Confirmar os termos; informar a licença do `toon-characters-bevy` (código) e dos ícones Phosphor.
+4. ~~Licença~~: respondido, os pacotes ficam só no repositório privado e não serão redistribuídos. Resta confirmar os termos da licença do `toon-characters-bevy` (código) e dos ícones Phosphor; informar a licença do `toon-characters-bevy` (código) e dos ícones Phosphor.
 5. ~~Onde mora o slice~~: respondido, repositório privado novo (sem alvos no Caju). Falta apenas **criar o repositório** (§ abaixo).
 6. **Regras de movimento**: confirmar 4 vizinhos (como no servidor?) para o A\* local; ler o servidor, se quiser fidelidade.
 7. **Móveis**: o slice usa cuboides (como o cliente de referência, que não tem GLB de móvel) ou o dono tem modelos de móveis para o slice?
