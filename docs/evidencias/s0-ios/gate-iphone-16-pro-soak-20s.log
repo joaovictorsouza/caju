@@ -1,0 +1,4 @@
+CAJU-GATE start model=iPhone17,1
+CAJU-GATE soak frames=1200 p50_ms=16.669333 p95_ms=16.669334 max_ms=16.701959 deltaRSS_MB=0.234375 taps=0
+CAJU-GATE cycles=50 deltaRSS_MB=0.0625 resources=12->10 allocatedBytes=26296320
+CAJU-GATE done
