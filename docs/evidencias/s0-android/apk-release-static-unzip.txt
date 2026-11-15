@@ -1,0 +1,12 @@
+Archive:  /Users/joaovictor/Projetos/caju-s0-android/Hosts/Android/app/build/outputs/apk/release/app-release-unsigned.apk
+ Length   Method    Size  Cmpr    Date    Time   CRC-32   Name
+--------  ------  ------- ---- ---------- ----- --------  ----
+      57  Defl:N       53   7% 01-01-1981 01:01 6cc40c61  META-INF/com/android/build/gradle/app-metadata.properties
+      46  Defl:N       48  -4% 01-01-1981 01:01 b8ff6554  META-INF/version-control-info.textproto
+     520  Stored      520   0% 01-01-1981 01:01 b2e60a54  classes.dex
+ 7064824  Stored  7064824   0% 01-01-1981 01:01 8a1bffe1  lib/arm64-v8a/libCajuAndroidHost.so
+ 1423104  Stored  1423104   0% 01-01-1981 01:01 0d79da2c  lib/arm64-v8a/libc++_shared.so
+    2604  Defl:N      936  64% 01-01-1981 01:01 3ee5d6dc  AndroidManifest.xml
+      40  Stored       40   0% 01-01-1981 01:01 1336500b  resources.arsc
+--------          -------  ---                            -------
+ 8491195          8489525   0%                            7 files

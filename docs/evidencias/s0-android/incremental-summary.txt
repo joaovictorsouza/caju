@@ -1,0 +1,8 @@
+# Resumo de Compilação Incremental (Meta ADR 0006 <= 5s)
+
+| Módulo | Plataforma | Rep 1 (s) | Rep 2 (s) | Rep 3 (s) | Rep 4 (s) | Rep 5 (s) | Mediana (s) | Status |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| CajuMath | Host (macOS) | 2.589 | 1.663 | 1.732 | 1.671 | 1.683 | 1.683 | PASS |
+| CajuMath | Android (aarch64) | 1.865 | 1.832 | 1.824 | 1.826 | 1.858 | 1.832 | PASS |
+| CajuUILayout | Host (macOS) | 1.433 | 1.540 | 1.505 | 1.414 | 1.399 | 1.433 | PASS |
+| CajuUILayout | Android (aarch64) | 1.497 | 1.565 | 1.498 | 1.563 | 1.466 | 1.498 | PASS |

@@ -1,0 +1,74 @@
+Starting a Gradle Daemon (subsequent builds will be faster)
+
+> Task :app:buildSwiftHost
+Building for debugging...
+[Pre-planning 1 / 184]
+[Planning deferred tasks]
+[58 / 109] CajuMath
+[59 / 109] CajuCore
+[67 / 109] CajuPlatform
+[68 / 109] CajuPlatform
+[82 / 129] CajuRHI
+[84 / 129] CajuRHI
+[86 / 130] CajuRHI
+[88 / 131] CajuRHI
+[101 / 131] CajuRHIVulkan
+[104 / 131] CajuPlatform
+[109 / 131] CajuCore
+[118 / 139] CajuRHIVulkan
+[122 / 139] CajuRHI
+[132 / 143] CajuPlatform
+[140 / 144] CajuAndroidHost
+[141 / 144] CajuRHIVulkan
+Build complete! (18,82 seg)
+ok: /Users/joaovictor/Projetos/caju-s0-android/Hosts/Android/app/src/main/jniLibs/arm64-v8a
+
+> Task :app:preBuild
+> Task :app:preDebugBuild
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:checkDebugAarMetadata
+> Task :app:javaPreCompileDebug
+> Task :app:processDebugNavigationResources
+> Task :app:generateDebugResValues
+> Task :app:compileDebugNavigationResources
+> Task :app:mapDebugSourceSetPaths
+> Task :app:generateDebugResources
+> Task :app:mergeDebugResources
+> Task :app:packageDebugResources
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:extractDeepLinksDebug
+> Task :app:parseDebugLocalResources
+> Task :app:processDebugMainManifest
+> Task :app:processDebugManifest
+> Task :app:mergeDebugShaders
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets
+> Task :app:compressDebugAssets
+> Task :app:processDebugJavaRes NO-SOURCE
+> Task :app:processDebugManifestForPackage
+> Task :app:checkDebugDuplicateClasses
+> Task :app:desugarDebugFileDependencies
+> Task :app:mergeDebugJavaResource
+> Task :app:mergeExtDexDebug
+> Task :app:mergeLibDexDebug
+> Task :app:processDebugResources
+> Task :app:mergeDebugJniLibFolders
+> Task :app:compileDebugJavaWithJavac NO-SOURCE
+> Task :app:dexBuilderDebug
+> Task :app:mergeProjectDexDebug
+> Task :app:validateSigningDebug
+> Task :app:mergeDebugNativeLibs
+> Task :app:writeDebugAppMetadata
+> Task :app:writeDebugSigningConfigVersions
+
+> Task :app:stripDebugDebugSymbols
+Unable to strip the following libraries, packaging them as they are: libBlocksRuntime.so, libCajuAndroidHost.so, libc++_shared.so, libdispatch.so, libswiftAndroid.so, libswiftCore.so, libswiftSynchronization.so, libswift_Builtin_float.so, libswift_Concurrency.so, libswift_RegexParser.so, libswift_StringProcessing.so. Run with --info option to learn more.
+
+> Task :app:packageDebug
+> Task :app:createDebugApkListingFileRedirect
+> Task :app:assembleDebug
+
+BUILD SUCCESSFUL in 29s
+35 actionable tasks: 35 executed
+./gradlew :app:assembleDebug  1.02s user 0.14s system 3% cpu 30.668 total
