@@ -14,6 +14,18 @@ swift sdk install https://download.swift.org/swift-6.4.2-release/android-sdk/swi
 sh "$(ls -d ~/Library/org.swift.swiftpm/swift-sdks/*android*/swift-android/scripts/setup-android-sdk.sh)"   # liga o NDK ao SDK
 ```
 
+### Toolchain open-source (necessário para `swift build` no Android)
+O toolchain do Xcode não traz `swift-autolink-extract`, e `swift build --swift-sdk aarch64-unknown-linux-android29 --product ...` falha no passo de link. Instale o toolchain de swift.org da mesma versão do SDK (6.4.2; sem sudo, o Xcode fica intacto):
+```sh
+curl -fLO https://download.swift.org/swift-6.4.2-release/xcode/swift-6.4.2-RELEASE/swift-6.4.2-RELEASE-osx.pkg
+pkgutil --check-signature swift-6.4.2-RELEASE-osx.pkg   # Developer ID Installer: Swift Open Source
+installer -pkg swift-6.4.2-RELEASE-osx.pkg -target CurrentUserHomeDirectory   # instala em ~/Library/Developer/Toolchains
+export TOOLCHAINS=org.swift.642202610261a   # CFBundleIdentifier do .xctoolchain instalado
+export ANDROID_NDK_HOME=~/Library/Android/sdk/ndk/30.0.15729638
+swift build -c release --swift-sdk aarch64-unknown-linux-android29 --product caju-bench   # passa (verificado em 2026-11-15)
+```
+Sem esse toolchain, o contorno é compilar os objetos (`--target`) e ligar à mão, como em `scripts/build-native.sh` e em `docs/evidencias/s0-android/scripts/build-bench-android.sh` (PR #23).
+
 ## Gerar, instalar e rodar
 ```sh
 cd Hosts/Android
