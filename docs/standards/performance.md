@@ -8,6 +8,7 @@ Metas medidas nos aparelhos de referência (Galaxy S22, iPhone 16 Pro; ADR 0007)
 - **Memória:** GPU ≤ 300 MB; residente ≤ 600 MB no cenário de referência.
 - **Sem travadas:** nenhum quadro > 50 ms por compilação de pipeline, upload de textura ou carga de asset.
 - **Quadro sem mudança** de UI custa só uma checagem de sujeira.
+- **Display list da UI** (contrato U-1, [ADR 0026](../adr/0026-ui-display-list-e-dsl.md)): reconstrução reaproveita armazenamento (0 alocação em quadro estável); `revision`/`propsRevision` iguais ⇒ zero trabalho de CPU no batcher; mudança só de desenho altera apenas a tabela de camadas. `body` < 100 ns `(?)`, ≤ 40 draw calls na tela de loja `(?)`; sem *parameter packs* no caminho quente (ADR 0014).
 
 ## Regras
 1. Nenhuma alocação por quadro no caminho quente (verificado por inspeção de SIL/instrumentação em testes dos módulos quentes).

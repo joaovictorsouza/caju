@@ -53,7 +53,7 @@ Camada 4:           CajuNet CajuTesting CajuTools CajuScripting(futuro)
 Dependências só para baixo; cada módulo compila e testa isolado; sem conceitos de jogo específico nos módulos.
 
 ## 6. UI
-Resumo (detalhes no ADR 0002): DSL → núcleo retido (`CajuUICore`) → layout puro → display list → RHI (SDF para retângulos/sombras, MSDF para texto, ≤ 40 draw calls). `@State` em slot table, tracking por View com `body` em lote no fim do quadro, propriedades de desenho ligadas direto ao nó. Quadro sem mudança custa só uma checagem de sujeira. Hot reload: *previews* offscreen no macOS (`ViewPreview`) e, no futuro, UI como dado. Equivalência Compose documentada (`Column`≈`VStack`, `remember`≈`@State`, `LaunchedEffect`≈`.task`). Acessibilidade: campos `role/label` no nó desde o início; espelho nativo na v1.0.
+Resumo (detalhes no ADR 0002): DSL → núcleo retido (`CajuUICore`) → layout puro → display list ([contrato U-1](briefs/u-1.md), [ADR 0026](adr/0026-ui-display-list-e-dsl.md), proposto) → RHI (SDF para retângulos/sombras, MSDF para texto, ≤ 40 draw calls). `@State` em slot table, tracking por View com `body` em lote no fim do quadro, propriedades de desenho ligadas direto ao nó. Quadro sem mudança custa só uma checagem de sujeira. Hot reload: *previews* offscreen no macOS (`ViewPreview`) e, no futuro, UI como dado. Equivalência Compose documentada (`Column`≈`VStack`, `remember`≈`@State`, `LaunchedEffect`≈`.task`). Acessibilidade: campos `role/label` no nó desde o início; espelho nativo na v1.0.
 
 ## 7. Leveza e performance
 - Arquétipos SoA, *change ticks*, arenas por quadro, handles numéricos, propagação de transform por subárvore suja.
@@ -99,7 +99,7 @@ Ver ADR 0006 (ciclos de background/resume e recriação de superfície sem vazam
 
 ### Onda 1: integração por módulo (depende de TB-1, TB-2 e do gate)
 Assets+ECS (`AssetServer`, handles, hot reload), Render completo, Input e gestos, UI integrada (DSL, widgets, batcher), Anim, Physics (ECS), Audio (`miniaudio`), Tools (texture, validate-gltf, manifest). Dentro da onda, módulos diferentes continuam paralelos (um diretório por dono).
-Brief proposto (trilhas S-0, A-1, A-2, R-1, V-1, I-1, U-1, AN-1, PH-1, AU-1, T-1, dependências, ADRs 0020 a 0029 reservados e gate): [briefs/onda-1.md](briefs/onda-1.md).
+Brief proposto (trilhas S-0, A-1, A-2, R-1, V-1, I-1, U-1, AN-1, PH-1, AU-1, T-1, dependências, ADRs 0020 a 0029 reservados e gate): [briefs/onda-1.md](briefs/onda-1.md). Contrato da UI (U-1a núcleo e U-1b render, display list, DSL; só a U-1b-gpu depende da R-1a), em rascunho: [briefs/u-1.md](briefs/u-1.md) e [ADR 0026](adr/0026-ui-display-list-e-dsl.md).
 
 ### Depois
 Plano do vertical slice (referência `resortclient` + `toon-characters-bevy`, fatias F0 a F9, dados locais, riscos e perguntas ao dono): [planejamento-vertical-slice.md](planejamento-vertical-slice.md).
