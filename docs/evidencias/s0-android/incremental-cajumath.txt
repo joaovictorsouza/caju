@@ -1,0 +1,21 @@
+# Benchmark de Compilação Incremental: CajuMath
+Arquivo alterado: Sources/CajuMath/CajuScalar.swift
+Meta ADR 0006: <= 5.000 s
+
+## Host (macOS Apple Silicon):
+- Repetição 1: 2.589 s
+- Repetição 2: 1.663 s
+- Repetição 3: 1.732 s
+- Repetição 4: 1.671 s
+- Repetição 5: 1.683 s
+- Mediana: 1.683 s
+- Status: APROVADO (<= 5s)
+
+## Android (aarch64-unknown-linux-android29):
+- Repetição 1: 1.865 s
+- Repetição 2: 1.832 s
+- Repetição 3: 1.824 s
+- Repetição 4: 1.826 s
+- Repetição 5: 1.858 s
+- Mediana: 1.832 s
+- Status: APROVADO (<= 5s)

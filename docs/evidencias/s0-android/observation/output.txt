@@ -1,0 +1,42 @@
+==> 1. Compilando objetos Swift para Android arm64...
+Building for production...
+[Planning deferred tasks]
+[3 / 6] obs-android-product
+error: unable to spawn process '/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift-autolink-extract' (No such file or directory)
+error: SwiftAutolinkExtract obs_android failed with a nonzero exit code. Command line:     cd /private/tmp
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift-autolink-extract /private/tmp/obs-android/.build/out/Intermediates.noindex/obs-android.build/Release-android-aarch64/obs-android-p.build/Objects-normal/aarch64/main.o -o /private/tmp/obs-android/.build/out/Intermediates.noindex/obs-android.build/Release-android-aarch64/obs-android-p.build/Objects-normal/aarch64/obs_android-swiftbuild.autolink
+error: Build failed
+==> 2. Ligando executável obs-android com Clang/LLD do NDK...
+==> 3. Resolvendo e empacotando dependências transitivas do runtime...
+==> Conteúdo de /tmp/obs-android/out:
+total 51176
+-rw-r--r--@ 1 joaovictor  wheel    14K Nov 15 18:44 libBlocksRuntime.so
+-rwxr-xr-x@ 1 joaovictor  wheel   9.0M Nov 15 18:44 libc++_shared.so
+-rw-r--r--@ 1 joaovictor  wheel   413K Nov 15 18:44 libdispatch.so
+-rwxr-xr-x@ 1 joaovictor  wheel    79K Nov 15 18:44 libswiftAndroid.so
+-rwxr-xr-x@ 1 joaovictor  wheel    11M Nov 15 18:44 libswiftCore.so
+-rwxr-xr-x@ 1 joaovictor  wheel   236K Nov 15 18:44 libswiftObservation.so
+-rwxr-xr-x@ 1 joaovictor  wheel   123K Nov 15 18:44 libswiftSynchronization.so
+-rwxr-xr-x@ 1 joaovictor  wheel    12K Nov 15 18:44 libswift_Builtin_float.so
+-rwxr-xr-x@ 1 joaovictor  wheel   1.3M Nov 15 18:44 libswift_Concurrency.so
+-rwxr-xr-x@ 1 joaovictor  wheel   1.5M Nov 15 18:44 libswift_RegexParser.so
+-rwxr-xr-x@ 1 joaovictor  wheel   1.1M Nov 15 18:44 libswift_StringProcessing.so
+-rwxr-xr-x@ 1 joaovictor  wheel    43K Nov 15 18:44 obs-android
+==> 4. Enviando binários via adb para o Galaxy S22+ (RQCT202D4FM)...
+/tmp/obs-android/out/libBlocksRuntime.so: 1 file pushed, 0 skipped. 140.2 MB/s (14488 bytes in 0.000s)
+/tmp/obs-android/out/libc++_shared.so: 1 file pushed, 0 skipped. 227.6 MB/s (9486368 bytes in 0.040s)
+/tmp/obs-android/out/libdispatch.so: 1 file pushed, 0 skipped. 49.2 MB/s (423120 bytes in 0.008s)
+/tmp/obs-android/out/libswiftAndroid.so: 1 file pushed, 0 skipped. 280.2 MB/s (80568 bytes in 0.000s)
+/tmp/obs-android/out/libswiftCore.so: 1 file pushed, 0 skipped. 135.8 MB/s (11670272 bytes in 0.082s)
+/tmp/obs-android/out/libswiftObservation.so: 1 file pushed, 0 skipped. 31.1 MB/s (241312 bytes in 0.007s)
+/tmp/obs-android/out/libswiftSynchronization.so: 1 file pushed, 0 skipped. 299.1 MB/s (125784 bytes in 0.000s)
+/tmp/obs-android/out/libswift_Builtin_float.so: 1 file pushed, 0 skipped. 192.9 MB/s (12608 bytes in 0.000s)
+/tmp/obs-android/out/libswift_Concurrency.so: 1 file pushed, 0 skipped. 368.6 MB/s (1376632 bytes in 0.004s)
+/tmp/obs-android/out/libswift_RegexParser.so: 1 file pushed, 0 skipped. 114.8 MB/s (1575416 bytes in 0.013s)
+/tmp/obs-android/out/libswift_StringProcessing.so: 1 file pushed, 0 skipped. 87.5 MB/s (1125152 bytes in 0.012s)
+/tmp/obs-android/out/obs-android: 1 file pushed, 0 skipped. 480.6 MB/s (43952 bytes in 0.000s)
+12 files pushed, 0 skipped. 118.6 MB/s (26175672 bytes in 0.210s)
+==> 5. Executando obs-android no aparelho...
+=== Teste do Observation Framework no Android arm64 ===
+OK: withObservationTracking correctly tracked mutation and fired onChange once
+Resultado: OK

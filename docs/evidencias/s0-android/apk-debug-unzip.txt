@@ -1,0 +1,20 @@
+Archive:  /Users/joaovictor/Projetos/caju-s0-android/Hosts/Android/app/build/outputs/apk/debug/app-debug.apk
+ Length   Method    Size  Cmpr    Date    Time   CRC-32   Name
+--------  ------  ------- ---- ---------- ----- --------  ----
+      57  Defl:N       53   7% 01-01-1981 01:01 6cc40c61  META-INF/com/android/build/gradle/app-metadata.properties
+     560  Stored      560   0% 01-01-1981 01:01 449208fd  classes.dex
+   14488  Stored    14488   0% 01-01-1981 01:01 2420b428  lib/arm64-v8a/libBlocksRuntime.so
+ 4743560  Stored  4743560   0% 01-01-1981 01:01 2f387e35  lib/arm64-v8a/libCajuAndroidHost.so
+ 9486368  Stored  9486368   0% 01-01-1981 01:01 f7a6b2d9  lib/arm64-v8a/libc++_shared.so
+  423120  Stored   423120   0% 01-01-1981 01:01 a3c9ac21  lib/arm64-v8a/libdispatch.so
+   80568  Stored    80568   0% 01-01-1981 01:01 4e8214c8  lib/arm64-v8a/libswiftAndroid.so
+11670272  Stored 11670272   0% 01-01-1981 01:01 11ed2d52  lib/arm64-v8a/libswiftCore.so
+  125784  Stored   125784   0% 01-01-1981 01:01 87ff3f16  lib/arm64-v8a/libswiftSynchronization.so
+   12608  Stored    12608   0% 01-01-1981 01:01 9bffbb56  lib/arm64-v8a/libswift_Builtin_float.so
+ 1376632  Stored  1376632   0% 01-01-1981 01:01 59c0ca4d  lib/arm64-v8a/libswift_Concurrency.so
+ 1575416  Stored  1575416   0% 01-01-1981 01:01 c3bbf03f  lib/arm64-v8a/libswift_RegexParser.so
+ 1125152  Stored  1125152   0% 01-01-1981 01:01 d2e34e3e  lib/arm64-v8a/libswift_StringProcessing.so
+    2656  Defl:N      954  64% 01-01-1981 01:01 6274b129  AndroidManifest.xml
+      40  Stored       40   0% 01-01-1981 01:01 1336500b  resources.arsc
+--------          -------  ---                            -------
+30637281         30635575   0%                            15 files

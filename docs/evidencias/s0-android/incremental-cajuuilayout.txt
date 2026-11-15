@@ -1,0 +1,21 @@
+# Benchmark de Compilação Incremental: CajuUILayout
+Arquivo alterado: Sources/CajuUILayout/CajuLayoutTypes.swift
+Meta ADR 0006: <= 5.000 s
+
+## Host (macOS Apple Silicon):
+- Repetição 1: 1.433 s
+- Repetição 2: 1.540 s
+- Repetição 3: 1.505 s
+- Repetição 4: 1.414 s
+- Repetição 5: 1.399 s
+- Mediana: 1.433 s
+- Status: APROVADO (<= 5s)
+
+## Android (aarch64-unknown-linux-android29):
+- Repetição 1: 1.497 s
+- Repetição 2: 1.565 s
+- Repetição 3: 1.498 s
+- Repetição 4: 1.563 s
+- Repetição 5: 1.466 s
+- Mediana: 1.498 s
+- Status: APROVADO (<= 5s)

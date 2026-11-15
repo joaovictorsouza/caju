@@ -1,0 +1,26 @@
+{"suite":"CajuMath","results":[
+  {"name":"vec3.cross","iterations":1000000,"ns_per_op":3.433458},
+  {"name":"quat.rotate","iterations":1000000,"ns_per_op":3.517792},
+  {"name":"mat4.mul","iterations":1000000,"ns_per_op":3.760583},
+  {"name":"mat4.inverse","iterations":1000000,"ns_per_op":22.123709},
+  {"name":"mat4.inverseAffine","iterations":1000000,"ns_per_op":16.858834},
+  {"name":"quat.slerp","iterations":1000000,"ns_per_op":24.928},
+  {"name":"ray.intersects(aabb)","iterations":1000000,"ns_per_op":7.517},
+  {"name":"ray.intersectsTriangle","iterations":1000000,"ns_per_op":12.622}
+]}
+{"suite":"CajuUILayout","results":[
+  {"name":"uilayout.relayout_1000_nodes","iterations":2000,"ns_per_op":31146.75}
+]}
+{"suite":"CajuCore","results":[
+  {"name":"ecs.spawn(3 componentes)","iterations":1000000,"ns_per_op":196.546292},
+  {"name":"ecs.query.arity3(100k)","iterations":100000,"ns_per_op":3.49709},
+  {"name":"ecs.query.pack3(100k)","iterations":100000,"ns_per_op":34.45459}
+]}
+{"suite":"CajuPhysicsSpatial","results":[
+  {"name":"bvh.build(10k, SAH)","iterations":10000,"ns_per_op":916.875},
+  {"name":"bvh.insert(10k)","iterations":10000,"ns_per_op":626.9917},
+  {"name":"bvh.raycastFirst(10k, 1k raios)","iterations":1000,"ns_per_op":1323.708},
+  {"name":"bvh.query.overlap(10k, caixa 10³)","iterations":1000,"ns_per_op":289.75},
+  {"name":"triangleBVH.build(20k tri)","iterations":20000,"ns_per_op":423.90415},
+  {"name":"triangleBVH.raycastFirst(20k tri, 1k raios)","iterations":1000,"ns_per_op":297.958}
+]}
