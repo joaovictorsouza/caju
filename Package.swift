@@ -23,6 +23,24 @@ func module(_ name: String, _ dependencies: [Target.Dependency]) -> Target {
     )
 }
 
+/// O build cruzado para Android (swift-android-action) define `TARGET_OS_ANDROID`. Lá os testes da macro
+/// não rodam (a macro é do host) e compilá-los com `swift-syntax` + XCTest quebra o índice do compilador
+/// ("Failed opening .../index/store/...", ADR 0030): ficam de fora desse build.
+let macroTests: [Target] =
+    Context.environment["TARGET_OS_ANDROID"] == nil
+    ? [
+        .testTarget(
+            name: "CajuMacrosPluginTests",
+            dependencies: [
+                "CajuMacrosPlugin",
+                .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+                .product(name: "SwiftSyntaxMacroExpansion", package: "swift-syntax"),
+                .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax"),
+            ],
+            swiftSettings: common
+        )
+    ] : []
+
 let package = Package(
     name: "Caju",
     // iOS 17 e macOS 14 (par do iOS 17); Android API 29 vem pelo Swift SDK for Android (ADR 0007).
@@ -119,16 +137,6 @@ let package = Package(
             swiftSettings: common
         ),
         .testTarget(
-            name: "CajuMacrosPluginTests",
-            dependencies: [
-                "CajuMacrosPlugin",
-                .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
-                .product(name: "SwiftSyntaxMacroExpansion", package: "swift-syntax"),
-                .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax"),
-            ],
-            swiftSettings: common
-        ),
-        .testTarget(
             name: "CajuCoreTests",
             dependencies: ["CajuCore", "CajuTesting"],
             swiftSettings: common
@@ -179,5 +187,5 @@ let package = Package(
             ],
             swiftSettings: common
         ),
-    ]
+    ] + macroTests
 )
