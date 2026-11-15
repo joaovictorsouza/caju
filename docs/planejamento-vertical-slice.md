@@ -1,8 +1,14 @@
 # Plano do vertical slice (M4)
 
-> **Status:** proposta para revisão do dono (2026-11-15). Não implementa nada e não toca `Package.swift` nem CI. Base: [planejamento-engine.md](planejamento-engine.md) (§8 e marcos M3/M4), [briefs/onda-1.md](briefs/onda-1.md), ADR 0005 (Foundation só nas bordas) e ADR 0007 (aparelhos). Números marcados `(?)` não foram medidos.
+> **Status:** proposta para revisão do dono (2026-11-15). Não implementa nada e não toca `Package.swift` nem CI; o slice vive em repositório privado próprio (§0). Base: [planejamento-engine.md](planejamento-engine.md) (§8 e marcos M3/M4), [briefs/onda-1.md](briefs/onda-1.md), ADR 0005 (Foundation só nas bordas) e ADR 0007 (aparelhos). Números marcados `(?)` não foram medidos.
 
-## 0. Objetivo e interpretação
+## 0. Decisões do dono, objetivo e interpretação
+
+### Decisões do dono (2026-11-15)
+1. **O slice vive em repositório privado próprio** (sugestão: `joaovictorsouza/caju-vertical-slice`), não no Caju. **Não entram** alvos no `Package.swift` do Caju (`CajuSliceGame`/`CajuVerticalSlice` foram retirados deste plano); o slice consome o Caju como dependência SwiftPM.
+2. **Só o essencial agora, o resto por fases.** Expressões faciais (morph targets) ficam numa fase posterior; as fatias abaixo estão divididas em **Fase 1 (essencial)** e fases seguintes.
+
+### Objetivo e interpretação
 O dono pediu para usar `resortclient` (Rust + Bevy 0.19 + Avian 0.7, Resort Game) e `toon-characters-bevy` (protótipo Bevy 0.20 de personagem toon modular) como **referência e fonte de assets** do vertical slice da engine, **sem servidor** (tudo local). Interpretação adotada: este documento **planeja e prepara um slice incremental**, que será portado fatia a fatia conforme as trilhas da Onda 1 fecham. Nada é portado agora.
 
 O slice, como definido no plano, é: **personagem animado com skinning, UI de loja, câmera e toque**, medido em iPhone 16 Pro e Galaxy S22+. O jogo de referência dá a *cena concreta*: uma sala em grade (estilo Habbo), um avatar que anda até o tile tocado, uma loja com saldo e compra.
@@ -53,7 +59,7 @@ Rust, Cargo workspace (`protocol`, `nakama_client`, `game`, `toon_avatar`, `anim
 - **Fonte Inter** (OFL, com `OFL.txt`): pode ir ao repositório com o arquivo de licença. **Ícones Phosphor** (MIT `(?)`, conferir): idem, com aviso.
 - **Som da loja**: gerado por script no `resortclient`; o slice gera o seu (tom sintético) e não depende de arquivo de terceiros.
 
-**Consequência (regra proposta):** os assets do pacote ficam **fora do Git do Caju**, em pasta local apontada por variável de ambiente (`CAJU_SLICE_ASSETS`), listada no `.gitignore`. **O CI nunca vê esses assets**: testes e goldens de CI usam **assets sintéticos** (esqueleto de poucos joints e malha gerados por código). Só a medição em aparelho (M4) e o uso local usam o pacote real. Isso também é o que as trilhas A-1/AN-1/R-1 já precisam para testar headless.
+**Consequência (regra proposta):** os assets do pacote **nunca entram no Git do Caju** (MIT, público). O repositório privado do slice **pode** guardá-los **se** a licença permitir uso privado, o que **não consegui confirmar**: os textos do projeto dizem só "licença limitada" e o protótipo já os guarda num repositório privado. Conferir os termos do pacote (e do Mixamo) com o dono antes do primeiro commit de assets. Até lá, a regra segura é: pasta local fora do Git (`CAJU_SLICE_ASSETS`, no `.gitignore`) e **CI do Caju só com assets sintéticos** (esqueleto de poucos joints e malha gerados por código), o que as trilhas A-1/AN-1/R-1 já precisam para testar headless.
 
 ## 2. Mapeamento: feature → trilha → o que dá hoje
 
@@ -93,35 +99,38 @@ Legenda de "Hoje": ✅ dá para portar já (lógica pura, testável headless); �
 3. *Blend* alfa em R-1a (parede translúcida, ghost de construção). Alternativa: parede sempre opaca no primeiro slice.
 4. Morph targets (expressões). Alternativa: cabeça estática (`lod2`) no slice.
 5. Esqueleto compartilhado por várias malhas (roupa). Precisa estar no contrato da AN-1/R-1b (ADR 0027).
-6. Alvo de **código do jogo** no pacote (§3.0): exige `Package.swift`, portanto o S-0.
+6. ~~Alvo de código do jogo no pacote~~: retirado; o código do slice vai para repositório privado (§3.0).
 
 ## 3. Fatias incrementais
 
-### 3.0 Onde o código do slice vive (pedido ao S-0)
-O `Package.swift` está trancado. Proposta para o **PR dedicado do S-0** (que já altera o pacote): dois alvos novos.
-- `CajuSliceGame` (biblioteca): **lógica pura do jogo**, sem GPU: sala, caminho, câmera, estado da loja e carteira, catálogo, backend local. Depende só de módulos da engine. Testes em `CajuSliceGameTests`. É onde a maior parte do que "dá para portar hoje" entra.
-- `CajuVerticalSlice` (executável, em `Hosts/` ou `Sources/`): cola `CajuSliceGame` com Platform, Render, UI, Input, Audio. Única borda onde Foundation (leitura de JSON e de arquivos) é permitida (ADR 0005).
-Enquanto o S-0 não existe, **nada do slice é codificado**; a F0 abaixo só prepara dados e contratos.
+### 3.0 Onde o código do slice vive
+Decisão do dono: **repositório privado novo** (sugestão `caju-vertical-slice`), consumindo o Caju por SwiftPM (dependência por tag/revisão). **Nenhum alvo novo no `Package.swift` do Caju**, então o S-0 não precisa de `CajuSliceGame` nem `CajuVerticalSlice`. Estrutura sugerida do repositório: biblioteca `SliceGame` (lógica pura: sala, caminho, câmera, loja, carteira, backend local, testes headless), executável `VerticalSlice` (cola com Platform, Render, UI, Input, Audio; única borda com Foundation, ADR 0005), `Hosts/` (Apple e Android, reaproveitando os do Caju), `Assets/` (privado; licença a confirmar) e `docs/`.
+Consequências: o slice usa **só a API pública** do Caju, o que também valida os contratos das trilhas; mudanças de API no Caju seguem como PR de contrato; o CI do slice é próprio (assets reais podem entrar nele se a licença permitir). Enquanto o repositório não existir, nada do slice é codificado.
 
-Convenção: cada fatia termina com um **teste headless** (sintético) e, quando houver tela, uma **captura/golden** local (com assets reais) e uma linha em `docs/standards/performance.md`.
+Convenção: cada fatia termina com um **teste headless** e, quando houver tela, uma **captura/golden** e uma linha de medição.
 
-### 3.1 Fatias (em ordem)
+### 3.1 Fases e fatias (em ordem)
+Decisão do dono: **só o essencial agora, o resto em fases seguintes.**
+- **Fase 1 (essencial, até o M4):** F0 a F6 e F8 (sala, câmera, toque, avatar animado e vestido com cor chapada, HUD e loja, medição). F7 reduz-se ao som de compra.
+- **Fase 2 (depois do M4):** shader toon por máscara (se não vier antes), sombra e parede translúcida, móveis/construção.
+- **Fase 3:** **expressões faciais** (morph targets: parser, R-1b, AN-1, piscar e 6 expressões), pet, LOD/atlas, criador de personagem.
+
 Duas faixas independentes (mundo e UI) que se encontram na F8.
 
 | Fatia | Entrega | Depende de | Pronto quando (CI, sintético) | Medição |
 |---|---|---|---|---|
-| **F0** Preparação (agora, só docs) | Este plano aceito; **dados locais de exemplo** definidos (§4); script de **preparo do subconjunto de assets** (§3.2); `.gitignore` e variável `CAJU_SLICE_ASSETS`; pedido de contratos à A-1/R-1/AN-1 (§2.3) | aceite do dono | — | — |
-| **F1** Lógica da sala + caminho + câmera | `CajuSliceGame`: *heightmap*→tiles, paredes, `tile↔mundo`, A*, interpolação de waypoints, câmera (enquadrar/seguir/zoom), raio→tile | **S-0** (alvos novos) | Testes de propriedade (caminho válido, câmera dentro da sala, tile sob o raio) com PCG semeado; porta os testes de `room.rs`/`camera.rs`; zero alocação em `follow_step` | CPU de A* em sala 12×10 `(?)` |
+| **F0** Preparação (agora) | Este plano aceito; **repositório privado criado**; **dados locais de exemplo** definidos (§4); script de **preparo do subconjunto de assets** (§3.2); pedido de contratos à A-1/R-1/AN-1 (§2.3) | aceite do dono, repositório | — | — |
+| **F1** Lógica da sala + caminho + câmera | `SliceGame` (repositório do slice): *heightmap*→tiles, paredes, `tile↔mundo`, A*, interpolação de waypoints, câmera (enquadrar/seguir/zoom), raio→tile | contratos publicados das trilhas usadas (nenhum alvo novo no Caju) | Testes de propriedade (caminho válido, câmera dentro da sala, tile sob o raio) com PCG semeado; porta os testes de `room.rs`/`camera.rs`; zero alocação em `follow_step` | CPU de A* em sala 12×10 `(?)` |
 | **F2** Sala na tela | Piso e paredes procedurais, luz direcional, câmera fixa; marcador (cápsula/cubo) no tile; clique/toque escolhe o tile e o marcador **anda** pelo caminho local | F1, **R-1a**, **I-1** (tap/pinch), V-1 só para Android | Golden Metal da sala; testes de gestos com sequência sintética (tap vs. pinch vs. arrasto) | p50/p95 de quadro e draw calls (iPhone) `(?)` |
 | **F3** Personagem estático | Corpo + cabeça `lod2` + 1 roupa do pacote real, **cor chapada** do `materials.json`, em pose de repouso, parado no tile | **A-1** (+ extensão do parser), A-2 (PNG basta no início), R-1a | Teste do carregamento com GLB **sintético**; local: captura com assets reais | memória e tempo de carga `(?)` |
 | **F4** Skinning + idle/walk | Avatar anda com `walk`, para com `idle`; velocidade do clipe (1,31 tiles/s) casa com o movimento; `sit` ao tocar num assento (opcional) | **AN-1**, **R-1b** (skinning), V-1 para S22+ (cuidado com Adreno, §5) | Testes de propriedade de amostragem (quat normalizado, loop); golden de pose; benchmark de amostragem `(?)` | custo de skinning por avatar `(?)`; **marco M3 (parcial)** |
 | **F5** Vestir | Trocar top/bottom/sapato/cabelo por catálogo local; esconder partes do corpo cobertas; vários avatares (2–5) para medir | F4 + contrato "N malhas, 1 esqueleto" | Teste de ligação por nome de joint com esqueleto sintético; regras de `hides` | draw calls e memória com N avatares `(?)` |
-| **F6** HUD e loja (faixa UI, pode começar **antes** da F2) | `CajuSliceGame`: loja pura (árvore, filtro, preço, compra local, saldo). UI: DSL → árvore retida → layout → *hit-test* **headless**, depois render | F1 (lógica), **U-1a** (DSL/widgets), **U-1b** (render), **I-1** (rolagem), CajuText | Testes headless da loja e da UI (ofertas filtradas, botão desabilitado, compra debita); goldens de UI | **≤ 40 draw calls na tela de loja** (meta do brief); relayout < 1 ms `(?)` |
-| **F7** Som e acabamento visual | Som de compra (**AU-1**, tom sintético); **shader toon** por máscara + contorno (se o dono aprovar na R-1/ADR 0023); sombra projetada; parede translúcida | AU-1, R-1b, decisão §6 | Teste de ciclo de vida do áudio (dispositivo nulo); golden do toon | custo do toon por avatar `(?)` |
+| **F6** HUD e loja (faixa UI, pode começar **antes** da F2) | `SliceGame`: loja pura (árvore, filtro, preço, compra local, saldo). UI: DSL → árvore retida → layout → *hit-test* **headless**, depois render | F1 (lógica), **U-1a** (DSL/widgets), **U-1b** (render), **I-1** (rolagem), CajuText | Testes headless da loja e da UI (ofertas filtradas, botão desabilitado, compra debita); goldens de UI | **≤ 40 draw calls na tela de loja** (meta do brief); relayout < 1 ms `(?)` |
+| **F7** Som (Fase 1) e acabamento visual (Fase 2) | Fase 1: som de compra (**AU-1**, tom sintético). Fase 2: **shader toon** por máscara + contorno (se o dono aprovar na R-1/ADR 0023); sombra projetada; parede translúcida | AU-1, R-1b, decisão §6 | Teste de ciclo de vida do áudio (dispositivo nulo); golden do toon | custo do toon por avatar `(?)` |
 | **F8** Integração e medição (**M4**) | Uma cena: sala, câmera que segue, toque, avatar animado/vestido, HUD e loja, som; cenário de referência fixo | F2, F4, F5, F6, F7 + gate da Onda 1 | Teste de integração headless da cena; regressão > 10 % bloqueia | **NFR-001/002/003/008/009** em iPhone 16 Pro e S22+ |
-| **F9** Opcionais (só depois do M4) | Móveis cuboides e modo construção (ghost, giro, picking via PH-1); pet; expressões (morph, exige trilha nova); LOD/atlas/mesclagem; criador de personagem | M4 | — | — |
+| **F9** Fases 2 e 3 (só depois do M4) | Fase 2: móveis cuboides e modo construção (ghost, giro, picking via PH-1). Fase 3: **expressões (morph, exige trilha nova)**; pet; LOD/atlas/mesclagem; criador de personagem | M4 | — | — |
 
-Ordem de dependência real: **F1 → F2 → F3 → F4 → F5** (mundo) e **F1 → F6** (UI) em paralelo; F7 e F8 fecham. A F1 e a lógica da F6 são o que realmente se pode fazer logo após o S-0, sem esperar R-1, A-1 ou U-1.
+Ordem de dependência real: **F1 → F2 → F3 → F4 → F5** (mundo) e **F1 → F6** (UI) em paralelo; F7 e F8 fecham. A F1 e a lógica da F6 são o que realmente se pode fazer assim que o repositório do slice existir (só depende de `CajuMath`), sem esperar R-1, A-1 ou U-1.
 
 ### 3.2 Preparo local dos assets (F0)
 Script (Python puro, local, **não versionar o resultado**) que copia do `toon-characters-bevy` para `$CAJU_SLICE_ASSETS` um **subconjunto mínimo**: `F_body` e `F_head.001` em `lod2/original`, uma peça de cada slot em `lod2/models` (`F_top.001_shirt`, `F_bot.001_pants`, `F_shoes.001_boots`, `C_hair_short.001`), `animations/F/{character_anims.glb,clips.json}`, `materials.json`, `avatar_catalog.json` e `items/outfits.json`, mais as texturas PNG dessas peças. Tamanho estimado < 30 MB `(?)` (corpo F tem texturas de 2048 px com ≈ 2,6 MB cada; reduzir na T-1 quando existir). O segundo corpo (`M`) e o restante do catálogo entram só na F5.
@@ -144,7 +153,7 @@ Princípio: **a lógica do jogo fala com um protocolo `SliceBackend`** (Swift), 
 Observação de licença: os arquivos de `contract/` são do projeto do dono e podem ser copiados como fixtures; **os do pacote de personagens, não** (§1.3).
 
 ## 5. Riscos
-1. **Licença do pacote de personagens** (§1.3): vazar assets para o Git do Caju seria violação. Mitigação: pasta local ignorada, CI sintético, checagem no `scripts/check-forbidden.sh` por extensão/pasta `(?)`.
+1. **Licença do pacote de personagens** (§1.3): vazar assets para o Git do Caju seria violação; guardá-los até no repositório privado depende dos termos, **não confirmados**. Mitigação: CI do Caju só com sintéticos; no slice, conferir a licença antes de commitar.
 2. **Sem cor sem o shader toon**: as texturas são máscaras RGB, não albedo. Sem o shader (ou o fallback de cor chapada) o personagem aparece cinza/errado. Decisão de escopo da R-1.
 3. **`.basis` ≠ KTX2**: o `CajuAssetsCore` lê KTX2, e o pacote traz Basis UASTC. Opções: usar PNG até a T-1 converter (A-2 e T-1 pendentes), ou converter offline para KTX2/ASTC. Um transcodificador Basis é dependência C dedicada (ADR 0017); o slice **não deve depender** dele.
 4. **Parser glTF sem skins/animações/morph/material** (§2.1): se não entrar na A-1, a F3/F4 ficam bloqueadas.
@@ -153,18 +162,18 @@ Observação de licença: os arquivos de `contract/` são do projeto do dono e p
 7. **Orçamento de draw calls**: o protótipo gastou 6 draw calls só na cabeça e precisou de atlas e mesclagem; o teto do slice é ≤ 300 totais, UI ≤ 40. Medir F5 com N avatares antes de otimizar.
 8. **Tamanho e tempo**: corpo F tem texturas de 2048 px (≈ 2,6 MB cada); memória residente do cenário de referência ≤ 600 MB, GPU ≤ 300 MB `(?)`.
 9. **Slice grande demais**: o jogo de referência tem ≈ 31 mil linhas; o slice é um recorte (§3.1, F9 fora). Risco de "portar o jogo"; manter a lista de exclusões (linha 18 da §2.2).
-10. **`Package.swift` como gargalo**: os alvos do §3.0 precisam entrar no S-0, ou o slice só começa depois de um PR dedicado.
+10. **Repositório privado e versões**: o slice depende de tags do Caju; mudança de API no Caju quebra o slice. Fixar versão e atualizar por PR.
 11. **Versões**: o `resortclient` usa Bevy 0.19 e o `toon-characters-bevy` 0.20; os números de desempenho do protótipo **não são comparáveis** com os do Caju. Servem como referência de intenção, não como meta.
 
 ## 6. Perguntas para o dono
 1. **Prioridade dentro do `resortclient`**: confirmar o recorte do slice (sala + câmera + toque + avatar andando + loja com saldo). Algo a mais é prioridade (móveis e construção? pet? criador de personagem?) ou algo do recorte pode sair (som, loja)?
 2. **Visual do personagem**: o slice exige o **shader toon** (e a R-1 ganha material customizado) ou aceita **cor chapada** até depois do M4?
-3. **Expressões e piscar**: ficam fora (cabeça estática `lod2`) ou valem uma trilha nova (morph targets no parser, na R-1b e na AN-1)?
-4. **Licença**: confirmar que o pacote Rukha93 (e o Mixamo) **não** podem ser redistribuídos e que o plano "assets locais fora do Git" está certo; informar a licença do `toon-characters-bevy` (código) e dos ícones Phosphor.
-5. **Onde mora o slice**: aprova os alvos `CajuSliceGame` e `CajuVerticalSlice` no PR do S-0? Ou prefere repositório próprio?
+3. ~~Expressões~~: respondido, ficam para a Fase 3 (cabeça estática `lod2` até lá).
+4. **Licença**: o pacote Rukha93 (e o Mixamo) pode ficar num repositório **privado**? Confirmar os termos; informar a licença do `toon-characters-bevy` (código) e dos ícones Phosphor.
+5. ~~Onde mora o slice~~: respondido, repositório privado novo (sem alvos no Caju). Falta apenas **criar o repositório** (§ abaixo).
 6. **Regras de movimento**: confirmar 4 vizinhos (como no servidor?) para o A\* local; ler o servidor, se quiser fidelidade.
 7. **Móveis**: o slice usa cuboides (como o cliente de referência, que não tem GLB de móvel) ou o dono tem modelos de móveis para o slice?
 8. **Aparelhos**: o slice no iPhone 16 Pro e S22+ continua o plano; Android entra na F4 ou só na F8?
 
 ## 7. Documentos que este PR atualiza
-`docs/planejamento-engine.md` (§8, "Depois": link para este plano). Nenhum ADR novo: não há decisão tomada; as perguntas da §6 viram ADR (ou emenda do 0023/0027) quando o dono responder.
+`docs/planejamento-engine.md` (§8, "Depois": link para este plano). O S-0 não ganha alvos de slice. Nenhum ADR novo: não há decisão tomada; as perguntas da §6 viram ADR (ou emenda do 0023/0027) quando o dono responder.
