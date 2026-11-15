@@ -41,7 +41,7 @@ try scheduler.tick(delta: 1.0 / 60.0)
 
 ## Limites conhecidos
 - Máx. 64 componentes e 64 *tags*; componentes `BitwiseCopyable`.
-- `@Component(id:)` (macro, [ADR 0020](../../docs/adr/0020-macro-component.md)) gera só a conformância e o `componentID`; o ID continua manual e único (conflito detectado pelo mundo). Declarar `static let componentID` à mão segue válido. A macro vive em `Sources/CajuMacrosPlugin` (alvo `.macro`, `swift-syntax` fixado; roda no host).
+- `@Component(id:)` (macro, [ADR 0030](../../docs/adr/0030-macro-component.md)) gera só a conformância e o `componentID`; o ID continua manual e único (conflito detectado pelo mundo). Declarar `static let componentID` à mão segue válido. A macro vive em `Sources/CajuMacrosPlugin` (alvo `.macro`, `swift-syntax` fixado; roda no host).
 - Sem estado global mutável escondido: tudo vive em `CajuWorld`/`CajuScheduler`/filas passadas explicitamente. O agendador é single-thread; só o laço principal acessa o mundo.
 - `CajuQueryArity.swift` é gerado: `python3 docs/tools/gen-query-overloads.py`.
 

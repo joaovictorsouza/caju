@@ -3,7 +3,7 @@ import SwiftDiagnostics
 import SwiftSyntax
 import SwiftSyntaxMacros
 
-/// Implementação de `@Component(id:)` (declarada em `CajuCore`; ADR 0020).
+/// Implementação de `@Component(id:)` (declarada em `CajuCore`; ADR 0030).
 ///
 /// Gera `extension T: CajuComponent { static let componentID = CajuComponentID(id) }`.
 /// O `id` precisa ser um literal inteiro em `0..<64` e o tipo, um `struct` ou `enum`

@@ -1,4 +1,4 @@
-/// Gera a conformância a `CajuComponent` e o `componentID` estático (ADR 0020).
+/// Gera a conformância a `CajuComponent` e o `componentID` estático (ADR 0030).
 ///
 /// ```swift
 /// @Component(id: 48)

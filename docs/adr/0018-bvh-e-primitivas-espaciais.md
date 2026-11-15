@@ -13,7 +13,7 @@ Era necessário alinhar as primitivas entre `CajuMath` e `CajuPhysicsSpatial` se
 - **BVH dinâmica (`CajuBVH`):** árvore binária em array contíguo com *free lists* de nós e slots, handles geracionais (`CajuBVHProxy`), AABBs gordas com margem configurável (`fatMargin`) e predição por deslocamento, balanceamento por rotações AVL na inserção/remoção incremental e construção em lote via SAH *binned* (16 *bins*).
 - **BVH estática de triângulos (`CajuTriangleBVH`):** SAH *binned* (16 *bins*, até 4 triângulos por folha) com `CajuRayQuery`, `CajuAABB` (SAT de 13 eixos) e `CajuSphere` (Voronoi).
 - **Travessia sem alocação no caminho quente (`CajuBVHTraversalStack`):** pilha explícita com capacidade *inline* de 64 entradas (`4 x SIMD16`) e *overflow* reutilizável; variantes com `stack: inout CajuBVHTraversalStack` não alocam após aquecidas, enquanto sobrecargas sem `stack:` ficam documentadas como conveniência que cria pilha local por chamada.
-- **Testes e benchmarks temporários:** suítes unitárias e de propriedade (`CajuFuzz.run` com `10_000` iterações contra força bruta) residem em `Tests/CajuModulesTests/` e o benchmark em `caju-bench` permanece pendente `(?)` até PR dedicado no `Package.swift` para ligar `CajuPhysicsSpatial` a `CajuBenchmarks` e a um alvo de teste próprio.
+- **Testes e benchmarks temporários:** suítes unitárias e de propriedade (`CajuFuzz.run` com `10_000` iterações contra força bruta) residem em `Tests/CajuPhysicsSpatialTests/` e o benchmark na suíte `CajuPhysicsSpatial` do `caju-bench` (alvo de teste e dependência do benchmark adicionados em PR dedicado ao `Package.swift`); metas e números seguem `(?)` até medir.
 
 ## Alternativas
 - Manter `CajuAABB` e `CajuRay` duplicados em `CajuPhysicsSpatial`: gera conflito de lookup (`ambiguous for type lookup`) em qualquer alvo que importe `CajuMath` e `CajuPhysicsSpatial`.
@@ -23,7 +23,7 @@ Era necessário alinhar as primitivas entre `CajuMath` e `CajuPhysicsSpatial` se
 ## Consequências
 - Contratos de `CajuPhysics` (camada 3) e demais módulos consomem diretamente `CajuAABB`, `CajuSphere` e `CajuRayTriangleHit` de `CajuMath` junto com `CajuBVH`, `CajuTriangleBVH`, `CajuRayQuery` e `CajuTriangle` de `CajuPhysicsSpatial`, sem ambiguidade de nomes.
 - Consumidores que chamam `query(overlapping:)` passam a tratar `throws(CajuSpatialError)` porque `CajuMath.CajuAABB` não valida limites na construção.
-- Quando `Package.swift` for aberto em PR dedicado, pode-se criar `CajuPhysicsSpatialTests` e ligar `CajuPhysicsSpatial` ao `CajuBenchmarks` para medir vazão e latência (atualmente `(?)`).
+- `CajuPhysicsSpatialTests` e a ligação `CajuBenchmarks` → `CajuPhysicsSpatial` existem; falta medir vazão e latência (`(?)`).
 
 ## Quando reabrir
 - Se `CajuRender` ou outros módulos precisarem de `CajuTriangle` ou `CajuRayQuery` na camada 0 (promover ou alinhar contratos em `CajuMath` via PR de contrato).

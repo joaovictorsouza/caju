@@ -53,7 +53,7 @@ let package = Package(
         .executable(name: "caju-bench", targets: ["CajuBenchmarks"]),
     ],
     dependencies: [
-        // Só para a macro @Component (roda no host, não entra no binário do jogo; ADR 0020).
+        // Só para a macro @Component (roda no host, não entra no binário do jogo; ADR 0030).
         .package(url: "https://github.com/swiftlang/swift-syntax.git", exact: "602.0.0")
     ],
     targets: [
@@ -108,7 +108,7 @@ let package = Package(
         // Ferramentas
         .executableTarget(
             name: "CajuBenchmarks",
-            dependencies: ["CajuMath", "CajuCore", "CajuUILayout"],
+            dependencies: ["CajuMath", "CajuCore", "CajuUILayout", "CajuPhysicsSpatial"],
             swiftSettings: common
         ),
 
@@ -146,6 +146,11 @@ let package = Package(
         .testTarget(
             name: "CajuUILayoutTests",
             dependencies: ["CajuUILayout", "CajuMath", "CajuTesting"],
+            swiftSettings: common
+        ),
+        .testTarget(
+            name: "CajuPhysicsSpatialTests",
+            dependencies: ["CajuPhysicsSpatial", "CajuMath", "CajuTesting"],
             swiftSettings: common
         ),
         .testTarget(

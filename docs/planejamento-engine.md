@@ -81,12 +81,12 @@ Escopo original:
 ### Onda 0.5: em paralelo (≈ 8 sessões)
 | Trilha | Módulo(s) | Entrega |
 |---|---|---|
-| **TB-1** | `CajuCore`, `CajuScene` | ECS mínimo híbrido, `Query` com PoC de packs + SIL, agendador single-thread com validação de acesso, mensagens, estados, tempo, `componentID` estático por protocolo (macro `@Component(id:)` entra em PR dedicado do `Package.swift` com `swift-syntax`; [ADR 0014](adr/0014-ecs-query-e-component.md), [ADR 0020](adr/0020-macro-component.md)), Transform/hierarquia |
+| **TB-1** | `CajuCore`, `CajuScene` | ECS mínimo híbrido, `Query` com PoC de packs + SIL, agendador single-thread com validação de acesso, mensagens, estados, tempo, `componentID` estático por protocolo (macro `@Component(id:)` entra em PR dedicado do `Package.swift` com `swift-syntax`; [ADR 0014](adr/0014-ecs-query-e-component.md), [ADR 0030](adr/0030-macro-component.md)), Transform/hierarquia |
 | **TB-2** | `CajuPlatform`, `CajuRHI`, backend Metal | Janela iOS/macOS, RHI com render pass + transient + frame graph, Slang → MSL, cubo e botão com texto em aparelho real. **Fases 1 a 3 entregues no simulador: contrato, backend null, backend Metal, host Apple, demo cubo + botão, goldens e 50 ciclos (ΔRSS 0,14 MB no Mac) ([ADR 0015](adr/0015-contrato-rhi-e-platform.md), [brief](briefs/tb-2.md)); falta iPhone 16 Pro, toque e aliasing por heap `(?)`** |
 | **TB-Android** | Platform Android, backend Vulkan | NativeActivity em Swift, Game Thread, Vulkan próprio no S22+; **limite de 3 dias** ([ADR 0011](adr/0011-kill-criteria-tb-android.md)). **Estado (2026-11-13):** triângulo Vulkan em Swift rodando no S22+ com Game Thread própria ([ADR 0019](adr/0019-host-android-build-e-link.md), `Hosts/Android`); falta o backend `CajuRHI`, VMA, rotação e CI do APK |
 | **P-1** | `CajuMath` completo | SIMD, interseções, cor, easing, testes de propriedade (**entregue**: código, testes e benchmarks no `caju-bench`; medidas em M1 no README do módulo, falta linha de base em aparelho) |
 | **P-2** | `CajuAssetsCore` | glTF (validação rigorosa), KTX2/Basis, meshopt, PNG/JPEG, *fuzz*. Feito em Swift puro, exceto transcodificação Basis/Zstd e pixels JPEG (pendentes; ADR 0017) |
-| **P-3** | `CajuPhysicsSpatial` | BVH dinâmica e de triângulos, raycast/shapecast/sobreposição (**implementado**; testes em `CajuModulesTests`, benchmark pendente `(?)`, [ADR 0018](adr/0018-bvh-e-primitivas-espaciais.md)) |
+| **P-3** | `CajuPhysicsSpatial` | BVH dinâmica e de triângulos, raycast/shapecast/sobreposição (**implementado**; testes em `CajuPhysicsSpatialTests`, benchmark no `caju-bench`, números pendentes `(?)`, [ADR 0018](adr/0018-bvh-e-primitivas-espaciais.md)) |
 | **P-4** | `CajuUILayout` | Árvore retida, layout SwiftUI-like por faixas de tamanho ([ADR 0013](adr/0013-layout-de-ui-por-faixas.md)), stacks/ZStack/frame/padding/Spacer, hit-testing. **Implementado** (benchmark/testes dependem de PR de `Package.swift`) |
 | **P-5** | `CajuText` | Shaping, medida, quebra de linha, atlas MSDF em bitmap de CPU, modelo do `TextEditor` (sem dependências C; HarfBuzz/FreeType por PR dedicado, ver [ADR 0012](adr/0012-texto-p5.md)) |
 
@@ -99,9 +99,11 @@ Ver ADR 0006 (ciclos de background/resume e recriação de superfície sem vazam
 
 ### Onda 1: integração por módulo (depende de TB-1, TB-2 e do gate)
 Assets+ECS (`AssetServer`, handles, hot reload), Render completo, Input e gestos, UI integrada (DSL, widgets, batcher), Anim, Physics (ECS), Audio (`miniaudio`), Tools (texture, validate-gltf, manifest). Dentro da onda, módulos diferentes continuam paralelos (um diretório por dono).
+Brief proposto (trilhas S-0, A-1, A-2, R-1, V-1, I-1, U-1, AN-1, PH-1, AU-1, T-1, dependências, ADRs 0020 a 0029 reservados e gate): [briefs/onda-1.md](briefs/onda-1.md).
 
 ### Depois
 **Vertical slice medido** (personagem animado com skinning, UI de loja, câmera, toque; NFR-001/002/003/008/009 nos aparelhos de referência) → v1.0 (texto completo, acessibilidade, i18n, LOD, quirks, conteúdo remoto, Toon) → opcionais (camera rig, Luau, física dinâmica, backend WebGPU).
+**Onda 2 (futura, registrada para não ser esquecida):** física dinâmica (corpos rígidos, colisão com resposta, restrições) como módulo opcional por *trait*, depois do vertical slice; a Onda 1 entrega só consultas espaciais e kinematic (PH-1). Decidido em 2026-11-14; brief e ADR próprios ao iniciar.
 
 ### Regras de paralelismo
 1. Um diretório = um dono por vez. 2. `Package.swift` e CI trancados (PR dedicado e curto para mudar). 3. Mudança de API entre módulos: PR de contrato antes do uso. 4. Sem `Utils.swift` compartilhado. 5. Gerados em `Generated/`, determinísticos. 6. PRs pequenos, *rebase* frequente, `CODEOWNERS`. 7. ADRs e docs de arquitetura só pela sessão coordenadora; trilhas propõem em PR separado.

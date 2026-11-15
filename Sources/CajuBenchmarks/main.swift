@@ -2,6 +2,7 @@
 // Uso: swift run -c release caju-bench
 import CajuCore
 import CajuMath
+import CajuPhysicsSpatial
 import CajuUILayout
 
 #if canImport(Glibc)
@@ -170,6 +171,97 @@ do {
         })
 }
 
+// BVH (P-3): cena determinística de 10 000 AABBs (xorshift32 com semente fixa).
+var spatialResults: [Result] = []
+do {
+    var rngState: UInt32 = 0x9E37_79B9
+    func rand01() -> Float {
+        rngState ^= rngState << 13
+        rngState ^= rngState >> 17
+        rngState ^= rngState << 5
+        return Float(rngState >> 8) / Float(1 << 24)
+    }
+    let boxCount = 10_000
+    var entries: [(bounds: CajuAABB, userData: UInt32)] = []
+    entries.reserveCapacity(boxCount)
+    for i in 0..<boxCount {
+        let lo = CajuVec3(rand01() * 200 - 100, rand01() * 200 - 100, rand01() * 200 - 100)
+        let size = CajuVec3(0.2 + rand01() * 2, 0.2 + rand01() * 2, 0.2 + rand01() * 2)
+        entries.append((CajuAABB(min: lo, max: lo + size), UInt32(i)))
+    }
+    spatialResults.append(
+        measureBatch("bvh.build(10k, SAH)", ops: boxCount) {
+            guard var tree = try? CajuBVH() else { return 0 }
+            return Float((try? tree.build(from: entries))?.count ?? 0)
+        })
+    spatialResults.append(
+        measureBatch("bvh.insert(10k)", ops: boxCount) {
+            guard var tree = try? CajuBVH() else { return 0 }
+            for e in entries { _ = try? tree.insert(bounds: e.bounds, userData: e.userData) }
+            return Float(tree.count)
+        })
+    if var tree = try? CajuBVH(), (try? tree.build(from: entries)) != nil {
+        var rays: [CajuRayQuery] = []
+        for _ in 0..<1_000 {
+            let origin = SIMD3<Float>(rand01() * 200 - 100, rand01() * 200 - 100, rand01() * 200 - 100)
+            let dir = SIMD3<Float>(rand01() - 0.5, rand01() - 0.5, rand01() - 0.5)
+            if let r = try? CajuRayQuery(origin: origin, direction: dir, tMax: 500) { rays.append(r) }
+        }
+        var stack = CajuBVHTraversalStack()
+        spatialResults.append(
+            measureBatch("bvh.raycastFirst(10k, 1k raios)", ops: rays.count) {
+                var acc: Float = 0
+                for r in rays { acc += tree.raycastFirst(r, stack: &stack)?.t ?? 0 }
+                return acc
+            })
+        let probe = CajuAABB(min: CajuVec3(-5, -5, -5), max: CajuVec3(5, 5, 5))
+        spatialResults.append(
+            measureBatch("bvh.query.overlap(10k, caixa 10³)", ops: 1_000) {
+                var hits = 0
+                for _ in 0..<1_000 {
+                    try? tree.query(overlapping: probe, stack: &stack) { _, _ in
+                        hits += 1
+                        return true
+                    }
+                }
+                return Float(hits)
+            })
+    }
+    // BVH de triângulos: grade 100×100 de quads no plano z = 0 (20 000 triângulos).
+    var positions: [SIMD3<Float>] = []
+    var indices: [UInt32] = []
+    let side = 100
+    for y in 0...side { for x in 0...side { positions.append(SIMD3<Float>(Float(x), Float(y), 0)) } }
+    for y in 0..<side {
+        for x in 0..<side {
+            let a = UInt32(y * (side + 1) + x)
+            let b = a + 1
+            let c = a + UInt32(side + 1)
+            indices += [a, b, c, b, c + 1, c]
+        }
+    }
+    spatialResults.append(
+        measureBatch("triangleBVH.build(20k tri)", ops: indices.count / 3) {
+            Float((try? CajuTriangleBVH(positions: positions, indices: indices))?.triangleCount ?? 0)
+        })
+    if let mesh = try? CajuTriangleBVH(positions: positions, indices: indices) {
+        var rays: [CajuRayQuery] = []
+        for _ in 0..<1_000 {
+            let origin = SIMD3<Float>(rand01() * 100, rand01() * 100, 5)
+            if let r = try? CajuRayQuery(origin: origin, direction: SIMD3<Float>(0, 0, -1), tMax: 50) {
+                rays.append(r)
+            }
+        }
+        var stack = CajuBVHTraversalStack()
+        spatialResults.append(
+            measureBatch("triangleBVH.raycastFirst(20k tri, 1k raios)", ops: rays.count) {
+                var acc: Float = 0
+                for r in rays { acc += mesh.raycastFirst(r, stack: &stack)?.t ?? 0 }
+                return acc
+            })
+    }
+}
+
 func emit(_ suite: String, _ results: [Result], last: Bool) {
     print("{\"suite\":\"\(suite)\",\"results\":[")
     for (i, r) in results.enumerated() {
@@ -182,4 +274,5 @@ func emit(_ suite: String, _ results: [Result], last: Bool) {
 }
 emit("CajuMath", mathResults, last: false)
 emit("CajuUILayout", layoutResults, last: false)
-emit("CajuCore", ecsResults, last: true)
+emit("CajuCore", ecsResults, last: false)
+emit("CajuPhysicsSpatial", spatialResults, last: true)

@@ -5,7 +5,7 @@ BVH dinâmica e estática e consultas espaciais (*raycast*, sobreposição, *sha
 - **Camada:** 1 (dependências só para baixo; ver §5 do plano).
 - **Trilha dona:** P-3.
 - **Estado:** implementado (consome `CajuAABB`, `CajuSphere` e `CajuRayTriangleHit` de `CajuMath`; define `CajuRayQuery`, `CajuTriangle`, pilha `CajuBVHTraversalStack`, `CajuBVH` dinâmica com SAH *binned* / rotações AVL e `CajuTriangleBVH` estática com SAH *binned* e Möller–Trumbore; [ADR 0018](../../docs/adr/0018-bvh-e-primitivas-espaciais.md)).
-- **Benchmark:** pendente — exigiria `CajuBenchmarks` depender de `CajuPhysicsSpatial`, mudança no `Package.swift` (PR dedicado); metas `(?)` até medir.
+- **Benchmark:** suíte `CajuPhysicsSpatial` no `caju-bench` (construção, inserção, `raycastFirst` e sobreposição na BVH dinâmica; construção e `raycastFirst` na BVH de triângulos); valores ainda não medidos `(?)` — ver o JSON do CI.
 
 ## Dependências
 - `CajuMath` (`CajuAABB`, `CajuSphere`, `CajuRay`, `CajuRayTriangleHit`, `CajuVec3`)
@@ -34,10 +34,11 @@ Sem dependência de `Foundation`, `Glibc` ou `Darwin`. Construído com `.swiftLa
 
 ## Como testar
 
-Os testes ficam em `Tests/CajuModulesTests/` (`CajuPhysicsSpatialPrimitivesTests.swift`, `CajuPhysicsSpatialBVHTests.swift` e `CajuPhysicsSpatialTriangleTests.swift`) usando Swift Testing e `CajuTesting` (`CajuPCG32` e `CajuFuzz.run` com `10_000` iterações por propriedade, tolerância relativa `1e-4` para valores `Float` e igualdade exata de conjuntos de handles/índices):
+Os testes ficam em `Tests/CajuPhysicsSpatialTests/` (`CajuPhysicsSpatialPrimitivesTests.swift`, `CajuPhysicsSpatialBVHTests.swift` e `CajuPhysicsSpatialTriangleTests.swift`) usando Swift Testing e `CajuTesting` (`CajuPCG32` e `CajuFuzz.run` com `10_000` iterações por propriedade, tolerância relativa `1e-4` para valores `Float` e igualdade exata de conjuntos de handles/índices):
 
 ```bash
-swift test --filter CajuModulesTests
+swift test --filter CajuPhysicsSpatialTests
+swift run -c release caju-bench   # suíte CajuPhysicsSpatial
 ```
 
 Ou na raiz do repositório:
@@ -53,4 +54,4 @@ swift test
 - `CajuBVHTraversalStack` evita alocações de *heap* até profundidade 64; árvores mais profundas que 64 níveis alocam no *buffer* de *overflow* na primeira ultrapassagem (reaproveitado após `reset()`).
 - Componentes não-nulos subnormais em `CajuRayQuery.direction` cujo recíproco `1.0 / component` sature em `±infinity` são tratados como paralelos (testam contenção da origem no *slab* do eixo correspondente).
 - `CajuTriangle.intersect(ray:)` descarta triângulos colineares/degenerados com razão área²/arestas² `<= 1e-12` (em `Float32`) para evitar hits espúrios, e `CajuTriangleBVH` aplica folga `1e-6` na poda de AABBs durante o *raycast* para absorver arredondamento entre *slabs* e Möller–Trumbore.
-- Benchmark: pendente — exigiria `CajuBenchmarks` depender de `CajuPhysicsSpatial`, mudança no `Package.swift` (PR dedicado); metas `(?)` até medir.
+- Benchmark: números do `caju-bench` ainda não registrados aqui `(?)`; registrar após a primeira rodada do CI/Mac.

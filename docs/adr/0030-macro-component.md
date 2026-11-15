@@ -1,4 +1,4 @@
-# ADR 0020: Macro `@Component(id:)` com `swift-syntax`
+# ADR 0030: Macro `@Component(id:)` com `swift-syntax`
 
 **Status:** Aceito. Complementa o [ADR 0014](0014-ecs-query-e-component.md) (que adiou a macro) e segue a política do [ADR 0005](0005-dependencias-e-foundation.md).
 
