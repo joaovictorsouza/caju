@@ -102,6 +102,8 @@ Assets+ECS (`AssetServer`, handles, hot reload), Render completo, Input e gestos
 Brief proposto (trilhas S-0, A-1, A-2, R-1, V-1, I-1, U-1, AN-1, PH-1, AU-1, T-1, dependências, ADRs 0020 a 0029 reservados e gate): [briefs/onda-1.md](briefs/onda-1.md).
 
 ### Depois
+Plano do vertical slice (referência `resortclient` + `toon-characters-bevy`, fatias F0 a F9, dados locais, riscos e perguntas ao dono): [planejamento-vertical-slice.md](planejamento-vertical-slice.md).
+
 **Vertical slice medido** (personagem animado com skinning, UI de loja, câmera, toque; NFR-001/002/003/008/009 nos aparelhos de referência) → v1.0 (texto completo, acessibilidade, i18n, LOD, quirks, conteúdo remoto, Toon) → opcionais (camera rig, Luau, física dinâmica, backend WebGPU).
 **Onda 2 (futura, registrada para não ser esquecida):** física dinâmica (corpos rígidos, colisão com resposta, restrições) como módulo opcional por *trait*, depois do vertical slice; a Onda 1 entrega só consultas espaciais e kinematic (PH-1). Decidido em 2026-11-14; brief e ADR próprios ao iniciar.
 
