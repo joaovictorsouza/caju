@@ -69,6 +69,7 @@ let package = Package(
         .library(name: "CajuTesting", targets: ["CajuTesting"]),
         .library(name: "CajuScripting", targets: ["CajuScripting"]),
         .executable(name: "caju-bench", targets: ["CajuBenchmarks"]),
+        .executable(name: "caju-tools", targets: ["CajuTools"]),
     ],
     dependencies: [
         // Só para a macro @Component (roda no host, não entra no binário do jogo; ADR 0030).
@@ -112,7 +113,7 @@ let package = Package(
         module("CajuRender", ["CajuCore", "CajuMath", "CajuRHI", "CajuScene"]),
         module("CajuAssets", ["CajuCore", "CajuAssetsCore", "CajuRHI"]),
         module("CajuAnim", ["CajuCore", "CajuMath", "CajuScene"]),
-        module("CajuAudio", ["CajuCore", "CajuMath"]),
+        module("CajuAudio", ["CajuCore", "CajuMath", "CMiniaudio"]),
         module("CajuUI", ["CajuCore", "CajuUILayout", "CajuText", "CajuRHI", "CajuInput"]),
         module("CajuPhysics", ["CajuCore", "CajuPhysicsSpatial", "CajuScene"]),
         // Camada 4
@@ -123,7 +124,21 @@ let package = Package(
         // Cabeçalhos Vulkan/NDK do sistema (só Android; Sources/CVulkan).
         .systemLibrary(name: "CVulkan"),
 
+        // miniaudio 0.11.26 vendorizado (ADR 0005; versão e hash em Sources/CMiniaudio/VERSION).
+        // Só o CajuAudio depende dele. Sem README.md exigido: é código de terceiros.
+        .target(
+            name: "CMiniaudio",
+            exclude: ["README.md", "LICENSE", "VERSION"],
+            publicHeadersPath: "include",
+            cSettings: [.define("MA_NO_ENCODING")]
+        ),
+
         // Ferramentas
+        .executableTarget(
+            name: "CajuTools",
+            exclude: ["README.md"],
+            swiftSettings: common
+        ),
         .executableTarget(
             name: "CajuBenchmarks",
             dependencies: ["CajuMath", "CajuCore", "CajuUILayout", "CajuPhysicsSpatial"],
@@ -134,6 +149,11 @@ let package = Package(
         .testTarget(
             name: "CajuMathTests",
             dependencies: ["CajuMath", "CajuTesting"],
+            swiftSettings: common
+        ),
+        .testTarget(
+            name: "CajuAssetsCoreTests",
+            dependencies: ["CajuAssetsCore", "CajuMath", "CajuTesting"],
             swiftSettings: common
         ),
         .testTarget(
@@ -183,7 +203,7 @@ let package = Package(
                 "CajuMath", "CajuCore", "CajuCollections", "CajuAssetsCore", "CajuText", "CajuUILayout",
                 "CajuPhysicsSpatial", "CajuPlatform", "CajuRHI", "CajuRHIMetal", "CajuRHIVulkan", "CajuScene",
                 "CajuInput", "CajuRender", "CajuAssets", "CajuAnim", "CajuAudio", "CajuUI", "CajuPhysics",
-                "CajuNet", "CajuTesting", "CajuScripting",
+                "CajuNet", "CajuTesting", "CajuScripting", "CMiniaudio",
             ],
             swiftSettings: common
         ),

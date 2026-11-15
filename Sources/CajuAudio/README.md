@@ -9,6 +9,7 @@
 ## Dependências
 - `CajuCore`
 - `CajuMath`
+- `CMiniaudio` (miniaudio 0.11.26 vendorizado; ADR 0005). Ainda não importado: a trilha AU-1 escreve a API.
 
 ## Como testar
 `swift test` na raiz; o alvo `CajuModulesTests` garante que o módulo compila e linka.
