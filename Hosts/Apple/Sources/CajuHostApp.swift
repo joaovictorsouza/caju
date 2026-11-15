@@ -15,6 +15,8 @@ final class CajuDemoState: @unchecked Sendable {
     var surfaceCreated = 0
     var surfaceDestroyed = 0
     var frames = 0
+    /// Modo de gate em aparelho (`-caju-gate`): 50 ciclos de superfície + tempos de quadro (ADR 0006, S-0).
+    let gate = ProcessInfo.processInfo.arguments.contains("-caju-gate")
 
     func tap(atPoint p: CGPoint) {
         let x = Float(p.x) * scale
@@ -31,6 +33,8 @@ struct CajuDemoApp: CajuApplication {
     let state: CajuDemoState
     private var gpu: CajuDemoGPU?
     private var angle: Float = 0
+    private var gateRunner = CajuDeviceGate()
+    private var lastSurface: CajuSurfaceDescriptor?
 
     init(state: CajuDemoState) { self.state = state }
 
@@ -45,6 +49,7 @@ struct CajuDemoApp: CajuApplication {
         case .surfaceCreated(let s), .surfaceChanged(let s):
             state.scale = s.scale
             let d = Self.descriptor(s)
+            lastSurface = d
             do {
                 if let gpu { try gpu.recreateSurface(d) } else { gpu = try CajuDemoGPU(surface: d) }
             } catch { print("caju demo: falha ao criar superfície: \(error)") }
@@ -67,6 +72,7 @@ struct CajuDemoApp: CajuApplication {
         }
         state.buttonRect = gpu.buttonRect
         state.frames += 1
+        if state.gate, let base = lastSurface { gateRunner.step(gpu: gpu, base: base, tick: tick, taps: state.taps) }
     }
 }
 
