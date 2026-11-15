@@ -13,7 +13,7 @@ A Onda 0.5 está mergeada, mas o **gate de saída do ADR 0006 não está fechado
 | `Observation` em Android real, tamanho do `.apk`, compilação incremental ≤ 5 s, soak p95 | Gate | **S-0** |
 | Transcodificação Basis/Zstd e pixels JPEG (ADR 0017) | A-1 (texturas) | **A-2** |
 | HarfBuzz/FreeType (ADR 0012) só se o shaper puro não bastar para latino | U-1 (texto) | decisão em U-1, PR dedicado |
-| Macro `@Component` adiada (exige `swift-syntax`, ADR 0014) | Ergonomia | fora da Onda 1; reavaliar no vertical slice |
+| Macro `@Component` (exige `swift-syntax`, ADR 0014) | Ergonomia | fora da Onda 1: PR próprio #20, [ADR 0030](../adr/0030-macro-component.md) |
 
 Observação de numeração: o ADR 0016 (P-1) foi reservado e nunca escrito; **não reutilizar**. Os ADRs da Onda 1 começam em 0020.
 

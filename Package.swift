@@ -3,6 +3,7 @@
 // Manifesto do Caju. TRANCADO: mudanças aqui vão em PR dedicado e curto
 // (CLAUDE.md, docs/standards/pr-e-revisao.md). Os targets abaixo seguem o mapa
 // de camadas do plano (§5): dependências só para baixo.
+import CompilerPluginSupport
 import PackageDescription
 
 /// Configurações comuns a todos os targets: Swift 6 (concorrência estrita) e
@@ -21,6 +22,24 @@ func module(_ name: String, _ dependencies: [Target.Dependency]) -> Target {
         swiftSettings: common
     )
 }
+
+/// O build cruzado para Android (swift-android-action) define `TARGET_OS_ANDROID`. Lá os testes da macro
+/// não rodam (a macro é do host) e compilá-los com `swift-syntax` + XCTest quebra o índice do compilador
+/// ("Failed opening .../index/store/...", ADR 0030): ficam de fora desse build.
+let macroTests: [Target] =
+    Context.environment["TARGET_OS_ANDROID"] == nil
+    ? [
+        .testTarget(
+            name: "CajuMacrosPluginTests",
+            dependencies: [
+                "CajuMacrosPlugin",
+                .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+                .product(name: "SwiftSyntaxMacroExpansion", package: "swift-syntax"),
+                .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax"),
+            ],
+            swiftSettings: common
+        )
+    ] : []
 
 let package = Package(
     name: "Caju",
@@ -51,10 +70,24 @@ let package = Package(
         .library(name: "CajuScripting", targets: ["CajuScripting"]),
         .executable(name: "caju-bench", targets: ["CajuBenchmarks"]),
     ],
+    dependencies: [
+        // Só para a macro @Component (roda no host, não entra no binário do jogo; ADR 0030).
+        .package(url: "https://github.com/swiftlang/swift-syntax.git", exact: "602.0.0")
+    ],
     targets: [
+        // Plugin de macros (compilado para o host). Sem README no alvo: ver Sources/CajuCore/README.md.
+        .macro(
+            name: "CajuMacrosPlugin",
+            dependencies: [
+                .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+                .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
+            ],
+            swiftSettings: common
+        ),
+
         // Camada 0 (puros)
         module("CajuMath", []),
-        module("CajuCore", []),
+        module("CajuCore", ["CajuMacrosPlugin"]),
         module("CajuCollections", []),
         // Camada 1 (puros)
         module("CajuAssetsCore", ["CajuMath", "CajuCollections"]),
@@ -154,5 +187,5 @@ let package = Package(
             ],
             swiftSettings: common
         ),
-    ]
+    ] + macroTests
 )

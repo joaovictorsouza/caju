@@ -15,8 +15,9 @@ ECS, agendador, tempo e mensagens. (Log ainda não implementado; fora do escopo 
 
 ## Exemplo
 ```swift
-struct Position: CajuComponent { static let componentID = CajuComponentID(48); var x, y: Float }
-struct Velocity: CajuComponent { static let componentID = CajuComponentID(49); var x, y: Float }
+@Component(id: 48) struct Position { var x, y: Float }  // gera `: CajuComponent` e `componentID`
+@Component(id: 49) struct Velocity { var x, y: Float }
+// Equivalente manual: struct X: CajuComponent { static let componentID = CajuComponentID(50) }
 
 let world = CajuWorld()
 _ = try world.spawn(Position(x: 0, y: 0), Velocity(x: 1, y: 0))
@@ -40,7 +41,7 @@ try scheduler.tick(delta: 1.0 / 60.0)
 
 ## Limites conhecidos
 - Máx. 64 componentes e 64 *tags*; componentes `BitwiseCopyable`.
-- Sem `@Component` (macro): exigiria `swift-syntax` (PR dedicado). IDs manuais por ora.
+- `@Component(id:)` (macro, [ADR 0030](../../docs/adr/0030-macro-component.md)) gera só a conformância e o `componentID`; o ID continua manual e único (conflito detectado pelo mundo). Declarar `static let componentID` à mão segue válido. A macro vive em `Sources/CajuMacrosPlugin` (alvo `.macro`, `swift-syntax` fixado; roda no host).
 - Sem estado global mutável escondido: tudo vive em `CajuWorld`/`CajuScheduler`/filas passadas explicitamente. O agendador é single-thread; só o laço principal acessa o mundo.
 - `CajuQueryArity.swift` é gerado: `python3 docs/tools/gen-query-overloads.py`.
 
