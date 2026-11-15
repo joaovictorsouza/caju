@@ -9,8 +9,8 @@ public enum CajuRenderMeshTag: Sendable {}
 public enum CajuRenderMaterialTag: Sendable {}
 
 /// Malha residente na GPU, conhecida pelo mundo de render: posição no cache de residência de `CajuRender`.
-/// O render cria o cache a partir do `CajuAssetHandle` da malha (A-1) e o sobe na GPU sob o orçamento de upload
-/// (ver `docs/briefs/r-1-contrato.md` §7.1 e ADR 0023); o jogo nunca cria este identificador à mão.
+/// O render cria o cache a partir do `CajuAssetHandle` da malha (A-1) e o sobe na GPU sob o orçamento
+/// de upload (ver `docs/briefs/r-1-contrato.md` §7.1 e ADR 0023); o jogo nunca cria este id à mão.
 public typealias CajuRenderMeshID = CajuHandle<CajuRenderMeshTag>
 /// Material residente (parâmetros + pipeline) conhecido pelo mundo de render.
 public typealias CajuRenderMaterialID = CajuHandle<CajuRenderMaterialTag>
@@ -30,8 +30,8 @@ public enum CajuAlphaMode: UInt8, Sendable, Hashable {
     case blend
 }
 
-/// Material **resolvido** para o desenho, em espaço linear: é o que o render monta a partir do asset de material
-/// (A-1) depois de subir as texturas. Textura ausente usa o valor escalar.
+/// Material **resolvido** para o desenho, em espaço linear: é o que o render monta a partir do asset
+/// de material (A-1) depois de subir as texturas. Textura ausente usa o valor escalar.
 public struct CajuMaterialParams: Sendable, Equatable {
     public var model: CajuMaterialModel
     public var alphaMode: CajuAlphaMode
@@ -102,10 +102,11 @@ public enum CajuRenderQueue: UInt8, Sendable, Hashable {
     case blend = 3
 }
 
-/// Chave de ordenação de 64 bits de um item de desenho: fila (4 bits), pipeline (12), material (16), profundidade (32).
+/// Chave de ordenação de 64 bits de um item de desenho: fila (4 bits), pipeline (12), material (16),
+/// profundidade (32).
 ///
 /// Ordenar as chaves agrupa por pipeline e material (menos trocas de estado) e, dentro do grupo, desenha
-/// opacos de frente para trás e transparentes de trás para frente (a profundidade é invertida na fila `blend`).
+/// opacos de frente para trás e transparentes de trás para frente (profundidade invertida na fila `blend`).
 public struct CajuDrawKey: Sendable, Hashable, Comparable {
     public var bits: UInt64
 
@@ -119,7 +120,7 @@ public struct CajuDrawKey: Sendable, Hashable, Comparable {
         let m = UInt64(min(material, 0xFFFF))
         var d: UInt64 = 0
         if depth > 0 {
-            // Distância não negativa: os bits do `Float` preservam a ordem; descarta-se o bit de sinal (31 bits).
+            // Distância não negativa: os bits do `Float` preservam a ordem; sem o bit de sinal (31 bits).
             d = UInt64(depth.bitPattern & 0x7FFF_FFFF)
         }
         if queue == .blend { d = 0x7FFF_FFFF - d }
