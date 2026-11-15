@@ -11,25 +11,27 @@ A Onda 1 ([brief](../briefs/onda-1.md)) pede render completo no `CajuRender`: un
 - **Frame graph de cena sobre o do RHI:** `shadow` (R-1b) → `main` (forward, MSAA transitório, resolve) → UI (passe declarado por U-1b no mesmo grafo) → *backbuffer*. Topologia compilada uma vez; ordem = declaração (ADR 0015).
 - **Draw list de valores** (`CajuDrawItem`) ordenada por chave de 64 bits `fila(4) | pipeline(12) | material(16) | profundidade(32)`; opacos frente-para-trás, `blend` trás-para-frente. Instancing agrupa itens consecutivos de mesma `(mesh, material, pipeline)` (R-1b).
 - **Materiais:** `unlit` e `pbr` (base color, metálico/rugosidade, normal, emissivo; sem IBL no MVP). **Luz:** uma direcional + ambiente. Variantes por permutação no PSO, não por ramo dinâmico.
-- **Fronteira com A-1:** `CajuRender` **não** depende de `CajuAssets`. A cola da aplicação implementa `CajuRenderResidency` e traduz handle de asset em `CajuRenderMeshID`/`CajuRenderMaterialID`; asset em `.loading`/`.failed` desenha substituto, sem bloquear nem lançar.
-- **Fronteira com AN-1:** R-1b recebe `CajuSkinPose` (paleta `jointWorld × inverseBind`, espaço do modelo, `jointCount ≤ 128 (?)`) e só a copia; não conhece esqueleto nem clipes. Onde o componente vive (`CajuScene` ou `CajuCore`) fecha no ADR 0027.
+- **Fronteira com A-1 (revisada 2026-11-15 após estudo; substitui a "cola de aplicação" do rascunho):** `CajuRender` **depende de `CajuAssets`** e é dono da **residência na GPU**. Componentes guardam `CajuAssetHandle`; a extração copia o handle; o render mantém um cache de residência em colunas indexado por `handle.index`, validado por `generation` e pela `revision` do asset (ADR 0021), sobe o dado de CPU sob `CajuUploadBudget` e desenha um substituto enquanto o asset não está `loaded`. Descarte com atraso de quadros em voo. Padrão: Bevy (`RenderAssets` a partir de eventos de asset), Godot e Filament (render dono dos recursos de GPU). Testes headless usam `CajuAssetServing` falso. Custo: uma linha em `Package.swift` em PR dedicado depois do aceite do contrato A-1 (#26); plano B: protocolo de residência implementado pela aplicação.
+- **Fronteira com AN-1 (revisada):** o AN-1 entrega **pose em espaço do modelo sem `inverseBind`**; o R-1b multiplica pelo `inverseBind` da malha ao copiar para o buffer do quadro (só para o que passou no *cull*; uma pose serve a várias malhas). `CajuSkinPose` (só referência: slot na arena, `jointCount`, `version`; ID 9 `(?)`) e a arena `CajuPoseArena` (matrizes, capacidade reservada) ficam em **`CajuScene`**, que AN-1 e R-1 já consomem, sem AN-1 → CajuRender. Rejeitado: juntas como entidades (Bevy), por custo de entidades e propagação; paleta dentro do componente (8 KB por coluna). `jointCount ≤ 128 (?)`. Formato fino no ADR 0027.
 - **Divisão:** R-1a (extração, unlit/PBR, luz, câmera, cull, PSO em memória) e R-1b (sombra, instancing, skinning, PSO persistido). R-1a não espera AN-1.
 - **Sem dependência nova e sem mudança em `Package.swift`.**
 
 ## Alternativas
 - **Desenhar direto do ECS** (sem mundo de render): menos código inicial, mas acopla o desenho a arquétipos, impede sobrepor jogo e render e dificulta testes headless.
-- **`CajuRender` depender de `CajuAssets`:** mesma camada e exigiria `Package.swift`; a cola mantém os módulos independentes.
+- **Cola de aplicação entre A-1 e R-1** (rascunho inicial): peça de integração sem dono que todo jogo reescreveria; rejeitada após comparar com Bevy, Godot, Filament e Unity.
+- **A-1 sobe a GPU (estilo Unity `Mesh`):** acopla A-1 ao RHI e tira o upload do orçamento por quadro do render.
+- **AN-1 multiplica o `inverseBind`:** antecipa trabalho para malhas fora do *cull* e amarra a pose a uma malha.
 - **Vários materiais/luzes dinâmicas no MVP:** fora do escopo do vertical slice; reabrir com medida.
 - **Extração diferencial desde o início:** mais complexa; só com benchmark.
 
 ## Consequências
 - Cada quadro paga uma cópia de extração (custo medido no benchmark de R-1a `(?)`); em troca o desenho é linear e testável sem ECS.
 - Mudar o formato de `CajuDrawKey` ou `CajuRenderWorld` depois de A-1/AN-1/U-1b consumirem exige novo ADR.
-- A cola da aplicação vira ponto de integração (precisa de dono no vertical slice).
+- `CajuRender` fica acoplado a `CajuAssets` (e a A-1 não precisa de GPU); AN-1 não conhece render nem malhas.
 - Verificação deste contrato só pelo CI (sem Swift na nuvem); números marcados `(?)`.
 
-## Perguntas abertas ao dono
-1. Aceitar a cola de aplicação como união A-1 ↔ R-1? 2. `CajuSkinPose` em `CajuScene` ou `CajuCore`? 3. ID de componente 8 livre para `CajuRenderMesh`? 4. Uma luz direcional basta para o vertical slice?
+## Decisões do dono (2026-11-15)
+Uma luz direcional basta para o vertical slice; ID de componente 8 livre; prefixo `Caju*` mantido na API de render. A ponte A-1 ↔ R-1 e o lugar da pose foram entregues ao estudo (acima). Aberto: PR de `Package.swift` e PR de contrato em `CajuScene`.
 
 ## Quando reabrir
 Extração custar > 1 ms para 1 000 entidades `(?)`; Vulkan exigir semântica de passe que o frame graph não expressa (ver ADR 0015); vertical slice pedir mais de uma luz, IBL ou cascatas de sombra.

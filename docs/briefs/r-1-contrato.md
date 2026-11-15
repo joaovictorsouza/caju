@@ -21,16 +21,16 @@ Regras do `CajuRenderWorld` (valor, `~Escapable` não é exigido; não é `Senda
 - Extração incremental: R-1a começa **cheia por quadro** (copia tudo que é visível ao ECS); extração por diferença (só `CajuGlobalTransform` alterado) entra se o benchmark mostrar custo `(?)`.
 
 ## 3. Entidade extraível
-Uma entidade é desenhada se tiver `CajuGlobalTransform` (CajuScene) e `CajuRenderMesh` (componente novo de `CajuRender`, ID de componente reservado no ADR 0023: **ID 8** `(?)`, a confirmar contra o mapa de IDs do `CajuCore`):
+Uma entidade é desenhada se tiver `CajuGlobalTransform` (CajuScene) e `CajuRenderMesh` (componente novo de `CajuRender`, ID de componente **8**, confirmado livre pelo dono):
 
 | Componente | Conteúdo |
 |---|---|
-| `CajuRenderMesh` | `mesh: CajuRenderMeshID`, `material: CajuRenderMaterialID`, `layerMask: UInt32`, `castsShadow: Bool` |
+| `CajuRenderMesh` | `mesh: CajuAssetHandle<mesh>`, `material: CajuAssetHandle<material>`, `layerMask: UInt32`, `castsShadow: Bool` |
 | `CajuCamera` (R-1a) | projeção (perspectiva/ortográfica), planos, `viewport`; a matriz de vista vem do `CajuGlobalTransform` |
 | `CajuDirectionalLight` (valor do contrato; componente em R-1a) | direção, cor, intensidade, `castsShadow` |
-| `CajuSkinPose` (R-1b) | ver §7.2 |
+| `CajuSkinPose` (R-1b, vive em `CajuScene`, ID 9 `(?)`) | ver §7.2 |
 
-`CajuRenderMeshID` e `CajuRenderMaterialID` são handles geracionais (`CajuHandle<Tag>`, ADR 0015) **do mundo de render**; o vínculo com `AssetServer` está no §7.1.
+`CajuRenderMeshID` e `CajuRenderMaterialID` são handles geracionais (`CajuHandle<Tag>`, ADR 0015) **do mundo de render** (posições no cache de residência); a ponte com `AssetServer` está no §7.1.
 
 ## 4. Frame graph de cena
 O `CajuFrameGraphBuilder` do RHI (ADR 0015) já cuida de passes, transientes e aliasing. R-1 declara o grafo **de cena** em cima dele:
@@ -70,29 +70,39 @@ Draw list = vetor reservado de `CajuDrawItem` (valor, sem referência), ordenado
 | | **R-1a** (extração + unlit/PBR + luz) | **R-1b** (sombra + instancing + skinning) |
 |---|---|---|
 | Entrega | `CajuRenderWorld`, extração cheia, `CajuCamera`, materiais unlit/PBR, luz direcional, frame graph `main` com MSAA, cull por frustum, draw list ordenada, cache de PSO em memória, golden Metal (cubo unlit, esfera PBR) | passe `shadow` (mapa único, PCF simples `(?)`), instancing automático, skinning na GPU (paleta de juntas), cache de PSO persistido |
-| Exige de **A-1** | `CajuMeshAsset`/`CajuTextureAsset` residentes na GPU consultáveis por handle (§7.1) | o mesmo, mais `inverseBindMatrices` e `jointCount` na malha skinned |
-| Exige de **AN-1** | nada | `CajuSkinPose` por entidade (§7.2) |
-| Depende de | CajuScene (existente), CajuRHI (existente), contrato A-1 | R-1a, contrato A-1, contrato AN-1 (ADR 0027) |
+| Exige de **A-1** | `CajuAssetHandle` + `CajuAssetServing` (`state`, `value`, `revision`) do PR #26, assets de malha, material e textura com dados de CPU | o mesmo, mais `inverseBindMatrices` e `jointCount` no asset de malha skinned |
+| Exige de **AN-1** | nada | `CajuSkinPose` + `CajuPoseArena`, pose em espaço do modelo sem `inverseBind` (§7.2) |
+| Depende de | CajuScene e CajuRHI (existentes), contrato A-1 (#26) e PR de `Package.swift` com `CajuRender` → `CajuAssets` | R-1a, contrato A-1, contrato AN-1 (ADR 0027) |
 
-R-1a **não bloqueia** em AN-1; em A-1 depende só do contrato (handles + residência), pois testes usam assets sintéticos criados direto no RHI.
+R-1a **não bloqueia** em AN-1; em A-1 depende só do contrato (`CajuAssetServing`, handles, `revision`): testes usam servidor falso e assets sintéticos.
 
-### 7.1 O que R-1 exige de A-1 (handles)
-`CajuRender` **não depende de `CajuAssets`** (mesma camada; `Package.swift` trancado). Quem une os dois é a **cola da aplicação** (camada 4 / host), que implementa o protocolo `CajuRenderResidency` declarado em R-1a:
+### 7.1 R-1 ↔ A-1: ponte entre assets e render (decisão, ver ADR 0023)
+**Decisão:** `CajuRender` passa a **depender de `CajuAssets`** (mesma camada, como `CajuUI` → `CajuInput`) e é dono da **residência na GPU**. Não há "cola" de aplicação.
+- O componente de malha guarda `CajuAssetHandle<…>` (8 bytes, `BitwiseCopyable`, ADR 0021). A extração copia o handle; o render mantém um **cache de residência** em colunas, indexado por `handle.index`, com `generation` e a `revision` do asset (que o A-1 já incrementa "para recriar buffer de GPU após hot reload").
+- Na preparação do quadro: `revision` igual → usa o recurso; diferente ou ausente e `state.hasValue` → sobe o dado de CPU (`value(of:)`, saída dos parsers de `CajuAssetsCore`) sob `CajuUploadBudget` (o que não couber espera o quadro seguinte); `.queued`/`.loading`/`.failed` → desenha o **substituto** (malha/material padrão), sem bloquear nem lançar.
+- Descarte: handle `.stale` ou evento `unloaded` → o render agenda a destruição do recurso com atraso de N quadros em voo (N = quadros em voo do RHI `(?)`).
+- O render consulta só o protocolo `CajuAssetServing` (genérico no servidor), então os testes headless usam um servidor falso e `CajuNullDevice`.
 
-1. **Handle de asset estável e barato:** `CajuAssetHandle<Asset>` (índice + geração, `Sendable`, `BitwiseCopyable`, consulta **sem alocação**, ADR 0021). A extração só copia o handle; nunca segura referência ao asset.
-2. **Estados de carga consultáveis:** `.loading`, `.ready`, `.failed`. Em `.loading`/`.failed` a extração desenha um **substituto** (malha/material padrão do `CajuRenderWorld`), nunca bloqueia o quadro nem lança erro de jogo.
-3. **Residência na GPU:** para um handle `.ready`, A-1 (que já depende de `CajuRHI`) entrega: buffers de vértice/índice do RHI, faixas de submalha (`firstIndex`, `indexCount`), **AABB local**, layout de vértice (id de formato), e para materiais as texturas como `CajuTextureHandle` do RHI + escalares. A cola converte isso em `CajuRenderMeshID`/`CajuRenderMaterialID`.
-4. **Hot reload:** troca de conteúdo mantém o handle e **incrementa uma geração de conteúdo**; o mundo de render invalida o que depende disso no quadro seguinte.
-5. **Descarte seguro:** destruir um asset não destrói recurso do RHI que ainda esteja na draw list do quadro em voo (descarte adiado por N quadros; N definido no ADR 0021 `(?)`).
+**Por que (comparação):**
 
-Se A-1 preferir outro formato, R-1 ajusta só o protocolo `CajuRenderResidency` e a cola; os tipos de valor deste PR não mudam.
+| Opção | Como outras engines fazem | Veredito |
+|---|---|---|
+| **Render depende de assets e é dono da residência (escolhida)** | Bevy: `RenderAssets<GpuMesh>` preparado no mundo de render a partir de `AssetEvent`; Godot e Filament: o servidor de render é dono dos recursos de GPU e o jogo passa ids | Sem cola, sem tradução por quadro; A-1 fica sem GPU (CPU puro, testável em Linux); upload sob orçamento e hot reload por `revision` |
+| Cola da aplicação + protocolo de residência (rascunho inicial) | Nenhuma engine mainstream precisa; vira código de integração que todo jogo reescreve | Rejeitada: peça extra, ponto de falha, ninguém dono |
+| A-1 sobe a GPU e entrega `CajuTextureHandle`/buffers | Unity: `Mesh` guarda os buffers | Rejeitada: acopla A-1 ao RHI e ao orçamento por quadro; o upload fica fora do controle do frame graph |
+| Módulo neutro novo abaixo dos dois | — | Rejeitada: exige `Package.swift` e tipos sem dono claro |
 
-### 7.2 O que R-1b exige de AN-1 (pose)
-- **Componente `CajuSkinPose`** (vive em módulo que AN-1 e R-1 já dependam: proposta `CajuScene`, PR de contrato pequeno do dono de `CajuScene`; alternativa: `CajuCore`. Decisão no ADR 0027).
-- Conteúdo: `jointCount ≤ 128` `(?)` e a **paleta de matrizes de skinning já multiplicada** (`jointWorld × inverseBind`), em espaço do modelo, `CajuMat4` coluna-principal como o resto do `CajuMath`, contígua. O AN-1 escreve; R-1b só copia para o buffer de pose do quadro e referencia por `poseIndex`.
-- **Quem multiplica `inverseBind`:** AN-1 (a malha skinned traz os `inverseBindMatrices` via A-1; AN-1 já tem as juntas). R-1b não conhece esqueleto nem clipes.
-- **Frequência:** pose atualizada pelo AN-1 antes da extração (`postUpdate`); `cull` fora da tela e taxa reduzida são decisão do AN-1 (plano §4); pose congelada = mesma pose no quadro seguinte (R-1b não recopia se um contador de versão não mudou `(?)`).
-- Normais/tangentes: skinning de posição, normal e tangente no vertex shader; sem *blend shapes* no MVP.
+**Custo aceito:** uma linha de dependência em `Package.swift` (`CajuRender` → `CajuAssets`) em **PR dedicado e curto**, só depois do aceite do contrato A-1 (PR #26). Até lá R-1a testa com o servidor falso do protocolo. Se o dono recusar a dependência, o plano B é o protocolo de residência do rascunho anterior (só os tipos de valor deste PR sobrevivem).
+
+### 7.2 R-1b ↔ AN-1: pose de skinning (decisão, ver ADR 0023)
+**Decisão:** o AN-1 entrega **pose em espaço do modelo, sem `inverseBind`**; o R-1b multiplica pelo `inverseBind` da malha ao copiar para o buffer do quadro. Componentes em `CajuScene`:
+- `CajuSkinPose` (coluna `BitwiseCopyable`, ~12 bytes): `poseSlot: UInt32` (posição na arena), `jointCount: UInt16`, `version: UInt32`. **Só referência**; matrizes ficam numa **arena `CajuPoseArena`** (recurso do mundo, capacidade reservada, sem alocação por quadro), escrita pelo AN-1 e lida pelo R-1b. Motivo: paleta de até 128 `CajuMat4` (~8 KB) não cabe numa coluna do ECS.
+- IDs de componente: `CajuRenderMesh` = **8** (confirmado livre pelo dono), `CajuSkinPose` = **9** `(?)`; 3 a 7 ficam livres para `CajuScene`.
+- **Por que `CajuScene`:** AN-1 e R-1 já dependem dela; evita AN-1 → CajuRender (animação headless não deve puxar GPU). Mudança aditiva pequena: PR de contrato do dono de `CajuScene`.
+- **Por que o `inverseBind` fica no render:** pertence à malha, não ao esqueleto; vários meshes skinned podem compartilhar uma pose (cada um aplica o seu); e só se multiplica para o que passou no *cull* (o AN-1 já corta fora da tela). Unreal e Bevy também finalizam as matrizes de osso no lado de render; Filament recebe a paleta pronta via `setBones`.
+- **Alternativa rejeitada:** juntas como entidades com `CajuTransform` (modelo Bevy): reaproveita a propagação, mas custa ~60 entidades por personagem e propaga hierarquia que o AN-1 faz melhor em SIMD num array.
+- `jointCount ≤ 128` `(?)`; sem *blend shapes* no MVP. R-1b só copia quando `version` mudou.
+- Contrato fino de formato (layout das matrizes, fronteira com clipes) fecha no ADR 0027 do AN-1.
 
 ## 9. Testes, goldens e benchmark (quando implementar)
 - **Já neste PR:** testes puros da `CajuDrawKey` (ordem de fila, frente-para-trás, trás-para-frente em `blend`, saturação, `NaN`) em `CajuRenderContractTests`.
@@ -104,8 +114,9 @@ Se A-1 preferir outro formato, R-1 ajusta só o protocolo `CajuRenderResidency` 
 ## 10. Riscos, kill-criteria e perguntas abertas
 - **Sem Swift na nuvem:** tipos e testes deste PR só são verificados pelo CI; números `(?)`.
 - **Extração cheia estoura o orçamento** (> 1 ms para 1 000 entidades `(?)`): passar para extração diferencial (ADR de revisão), sem mudar os tipos públicos.
-- **`Package.swift` trancado:** nenhuma dependência nova é necessária. Se A-1 exigir que `CajuAssets` seja visível a `CajuRender`, abrir PR dedicado de pacote (não previsto).
-- **Perguntas ao dono:** (1) aceitar a cola de aplicação como ponto de união A-1 ↔ R-1? (2) `CajuSkinPose` em `CajuScene` ou `CajuCore`? (3) ID de componente 8 livre? (4) uma única luz direcional no MVP basta para o vertical slice?
+- **`Package.swift` trancado:** a decisão do §7.1 exige uma linha (`CajuRender` → `CajuAssets`) em PR dedicado, depois do aceite do contrato A-1; sem ela vale o plano B do §7.1.
+- **Decisões do dono (2026-11-15):** (1)/(2) ponte A-1 ↔ R-1 e lugar da pose: o dono pediu estudo e decisão estratégica, registrada em §7.1/§7.2 e no ADR 0023; (3) uma luz direcional basta para o vertical slice (sim); ID 8 livre (sim); prefixo `Caju*` mantido na API de render por consistência com o resto da engine (o dono disse que não precisa manter em tudo; a UI decide o dela no ADR 0026).
+- **Aberto:** PR de `Package.swift` (`CajuRender` → `CajuAssets`) e PR de contrato em `CajuScene` (`CajuSkinPose`, `CajuPoseArena`); ambos depois do aceite deste PR.
 
 ## 11. Documentos que este PR atualiza
 ADR 0023 (proposto) + `docs/adr/README.md`; plano (§8 Onda 1); `docs/standards/performance.md` (metas de R-1 `(?)`) e `testes.md` (goldens de cena); `Sources/CajuRender/README.md` e DocC.

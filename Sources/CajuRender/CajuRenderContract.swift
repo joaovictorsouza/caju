@@ -8,8 +8,9 @@ import CajuRHI
 public enum CajuRenderMeshTag: Sendable {}
 public enum CajuRenderMaterialTag: Sendable {}
 
-/// Malha residente na GPU, conhecida pelo mundo de render. O mapeamento do handle de asset (A-1) para este
-/// identificador é feito pela cola da aplicação (ver `docs/briefs/r-1-contrato.md` §7.1), não por `CajuRender`.
+/// Malha residente na GPU, conhecida pelo mundo de render: posição no cache de residência de `CajuRender`.
+/// O render cria o cache a partir do `CajuAssetHandle` da malha (A-1) e o sobe na GPU sob o orçamento de upload
+/// (ver `docs/briefs/r-1-contrato.md` §7.1 e ADR 0023); o jogo nunca cria este identificador à mão.
 public typealias CajuRenderMeshID = CajuHandle<CajuRenderMeshTag>
 /// Material residente (parâmetros + pipeline) conhecido pelo mundo de render.
 public typealias CajuRenderMaterialID = CajuHandle<CajuRenderMaterialTag>
@@ -29,7 +30,8 @@ public enum CajuAlphaMode: UInt8, Sendable, Hashable {
     case blend
 }
 
-/// Parâmetros de material em espaço linear. Texturas são opcionais; textura ausente usa o valor escalar.
+/// Material **resolvido** para o desenho, em espaço linear: é o que o render monta a partir do asset de material
+/// (A-1) depois de subir as texturas. Textura ausente usa o valor escalar.
 public struct CajuMaterialParams: Sendable, Equatable {
     public var model: CajuMaterialModel
     public var alphaMode: CajuAlphaMode
