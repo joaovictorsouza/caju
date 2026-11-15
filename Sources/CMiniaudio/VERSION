@@ -1,0 +1,6 @@
+miniaudio 0.11.26
+upstream: https://github.com/mackron/miniaudio (tag 0.11.26, commit 877ea4a7c2601c7b0f2a44e83dfac42e6470fea6)
+arquivo: include/miniaudio.h (sem modificações)
+sha256: 6b376c7fbb1352ba1e0e432ab66069b335ea9405e45cb6c30b97ef0f3c9c3e0e
+licença: domínio público (Unlicense) ou MIT-0, à escolha (LICENSE)
+atualizar: baixar o mesmo arquivo da nova tag, trocar este arquivo e abrir PR dedicado (ADR 0005)
