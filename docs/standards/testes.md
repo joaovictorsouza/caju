@@ -19,3 +19,4 @@
 - **Benchmarks:** regressão > 10 % bloqueia merge; resultado guardado como JSON.
 - **Cobertura:** não há meta numérica global; o critério é *todo requisito `DEVE` do módulo tem teste* (rastreio por ID do catálogo).
 - Teste instável não é desligado: é corrigido ou removido com justificativa no PR.
+- **Render de cena (R-1):** extração testada headless com ECS sintético e `CajuNullDevice`; goldens de cena por backend (cubo unlit, esfera PBR, sombra, skinning com pose sintética) seguem a regra de goldens acima; a chave da draw list tem teste de propriedade/ordem em `CajuRenderContractTests`.
