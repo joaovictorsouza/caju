@@ -48,7 +48,8 @@ public struct CajuMaterialParams: Sendable, Equatable {
     public init(
         model: CajuMaterialModel = .pbr, alphaMode: CajuAlphaMode = .opaque,
         baseColor: CajuColor = CajuColor(r: 1, g: 1, b: 1), metallic: Float = 0, roughness: Float = 1,
-        emissive: CajuColor = CajuColor(r: 0, g: 0, b: 0), alphaCutoff: Float = 0.5, doubleSided: Bool = false,
+        emissive: CajuColor = CajuColor(r: 0, g: 0, b: 0), alphaCutoff: Float = 0.5,
+        doubleSided: Bool = false,
         baseColorTexture: CajuTextureHandle? = nil, metallicRoughnessTexture: CajuTextureHandle? = nil,
         normalTexture: CajuTextureHandle? = nil, emissiveTexture: CajuTextureHandle? = nil
     ) {
