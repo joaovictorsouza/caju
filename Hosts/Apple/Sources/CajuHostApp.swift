@@ -73,12 +73,15 @@ struct CajuDemoApp: CajuApplication {
     mutating func update(_ tick: CajuFrameTick) {
         guard let gpu else { return }
         angle += Float(tick.deltaSeconds) * (state.spinning ? 1.1 : 0.0)
+        let renderStart = ContinuousClock.now
         do { try gpu.renderFrame(angle: angle, spinning: state.spinning) } catch {
             print("caju demo: erro de render: \(error)")
         }
+        let cpu = ContinuousClock.now - renderStart
+        let cpuMillis = Double(cpu.components.attoseconds) / 1e15 + Double(cpu.components.seconds) * 1000
         state.buttonRect = gpu.buttonRect
         state.frames += 1
-        if state.gate, let base = lastSurface { gateRunner.step(gpu: gpu, base: base, tick: tick, taps: state.taps) }
+        if state.gate, let base = lastSurface { gateRunner.step(gpu: gpu, base: base, tick: tick, cpuMillis: cpuMillis, taps: state.taps) }
     }
 }
 
