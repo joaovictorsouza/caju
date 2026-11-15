@@ -29,9 +29,11 @@ struct CajuAssetsContractTests {
         let h = store.reserve()
         #expect(store.state(of: h) == .queued)
         #expect(store.value(of: h) == nil)
-        #expect(store.beginLoading(h))
+        let r1 = store.beginLoading(h)
+        #expect(r1)
         #expect(store.state(of: h) == .loading && store.state(of: h).isPending)
-        #expect(store.complete(h, value: Mesh(vertices: 3)))
+        let r2 = store.complete(h, value: Mesh(vertices: 3))
+        #expect(r2)
         #expect(store.state(of: h) == .loaded)
         #expect(store.value(of: h) == Mesh(vertices: 3))
         #expect(store.revision(of: h) == 1)
@@ -41,14 +43,17 @@ struct CajuAssetsContractTests {
         var store = CajuAssetStore<Mesh>()
         let h = store.reserve()
         store.beginLoading(h)
-        #expect(store.fail(h, error: .notFound(path: "a/b.glb")))
+        let r3 = store.fail(h, error: .notFound(path: "a/b.glb"))
+        #expect(r3)
         #expect(store.state(of: h) == .failed)
         #expect(store.error(of: h) == .notFound(path: "a/b.glb"))
         #expect(store.value(of: h) == nil)
         // Nova tentativa a partir de `failed` e sucesso limpam o erro.
-        #expect(store.beginReload(h))
+        let r4 = store.beginReload(h)
+        #expect(r4)
         #expect(store.state(of: h) == .loading)
-        #expect(store.complete(h, value: Mesh(vertices: 1)))
+        let r5 = store.complete(h, value: Mesh(vertices: 1))
+        #expect(r5)
         #expect(store.error(of: h) == nil)
     }
 
@@ -57,10 +62,12 @@ struct CajuAssetsContractTests {
         let h = store.reserve()
         store.beginLoading(h)
         store.complete(h, value: Mesh(vertices: 1))
-        #expect(store.beginReload(h))
+        let r6 = store.beginReload(h)
+        #expect(r6)
         #expect(store.state(of: h) == .reloading)
         #expect(store.value(of: h) == Mesh(vertices: 1))
-        #expect(store.complete(h, value: Mesh(vertices: 2)))
+        let r7 = store.complete(h, value: Mesh(vertices: 2))
+        #expect(r7)
         #expect(store.value(of: h) == Mesh(vertices: 2))
         #expect(store.revision(of: h) == 2)
     }
@@ -71,7 +78,8 @@ struct CajuAssetsContractTests {
         store.beginLoading(h)
         store.complete(h, value: Mesh(vertices: 1))
         store.beginReload(h)
-        #expect(store.fail(h, error: .cancelled))
+        let r8 = store.fail(h, error: .cancelled)
+        #expect(r8)
         #expect(store.state(of: h) == .loaded)
         #expect(store.value(of: h) == Mesh(vertices: 1))
         #expect(store.error(of: h) == .cancelled)
@@ -81,11 +89,15 @@ struct CajuAssetsContractTests {
     @Test func illegalTransitionsAreRejected() {
         var store = CajuAssetStore<Mesh>()
         let h = store.reserve()
-        #expect(!store.complete(h, value: Mesh(vertices: 1)))  // queued não completa
-        #expect(!store.fail(h, error: .cancelled))
-        #expect(!store.beginReload(h))
+        let r9 = store.complete(h, value: Mesh(vertices: 1))
+        #expect(!r9)  // queued não completa
+        let r10 = store.fail(h, error: .cancelled)
+        #expect(!r10)
+        let r11 = store.beginReload(h)
+        #expect(!r11)
         store.beginLoading(h)
-        #expect(!store.beginLoading(h))
+        let r12 = store.beginLoading(h)
+        #expect(!r12)
     }
 
     @Test func releaseToZeroInvalidatesHandleAndReusesSlotWithNewGeneration() {
@@ -93,20 +105,26 @@ struct CajuAssetsContractTests {
         let a = store.reserve()
         store.beginLoading(a)
         store.complete(a, value: Mesh(vertices: 9))
-        #expect(store.retain(a))
-        #expect(store.release(a))
+        let r13 = store.retain(a)
+        #expect(r13)
+        let r14 = store.release(a)
+        #expect(r14)
         #expect(store.state(of: a) == .loaded)  // ainda há uma posse
-        #expect(store.release(a))
+        let r15 = store.release(a)
+        #expect(r15)
         #expect(store.state(of: a) == .stale)
         #expect(store.value(of: a) == nil)
-        #expect(!store.release(a))  // handle velho
-        #expect(!store.retain(a))
+        let r16 = store.release(a)
+        #expect(!r16)  // handle velho
+        let r17 = store.retain(a)
+        #expect(!r17)
         #expect(store.liveCount == 0)
 
         let b = store.reserve()
         #expect(b.index == a.index && b.generation != a.generation)
         #expect(store.state(of: a) == .stale && store.state(of: b) == .queued)
-        #expect(!store.complete(a, value: Mesh(vertices: 1)))  // handle velho não escreve no slot novo
+        let r18 = store.complete(a, value: Mesh(vertices: 1))
+        #expect(!r18)  // handle velho não escreve no slot novo
     }
 
     @Test func pathsAreValidated() throws {
