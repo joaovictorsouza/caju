@@ -28,7 +28,7 @@ Uma página curta por decisão. Formato: **Status**, **Contexto**, **Decisão**,
 | [0019](0019-host-android-build-e-link.md) | Host Android: NativeActivity em Swift, `CVulkan` e link com o NDK | Aceito (link manual substituído pelo 0024) |
 | [0020](0020-gate-da-onda-0-5.md) | Resultado do gate de saída da Onda 0.5 (S-0): medidas e teto do `.apk` | Aceito (parcial) |
 | [0021](0021-assets-handles-e-ciclo-de-vida.md) | Assets: handles geracionais, estados de carga e ciclo de vida (A-1) | Aceito |
-| [0023](0023-mundo-de-render-e-extracao.md) | R-1: mundo de render separado, extração e draw list | Proposto |
+| [0023](0023-mundo-de-render-e-extracao.md) | R-1: mundo de render separado, extração e draw list | Aceito |
 | [0024](0024-vulkan-vma-e-sincronizacao.md) | Backend Vulkan do `CajuRHI`: VMA, ligação de recursos, layouts e swapchain | Aceito |
 | [0026](0026-ui-display-list-e-dsl.md) | Display list da UI e contrato da DSL (U-1) | Proposto |
 | [0027](0027-formato-de-pose-e-fronteira-r1b.md) | AN-1: formato de pose em espaço do modelo, arena e fronteira com R-1b | Proposto |

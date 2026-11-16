@@ -90,15 +90,12 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
                 CajuTextureDescriptor(
                     format: .rgba8Unorm, width: 1, height: 1, usage: [.sampled, .copyDestination],
                     label: "white"))
-            try [UInt8](repeating: 255, count: 4).withUnsafeBytes { raw throws(CajuRHIError) in
-                try device.writeTexture(
-                    white, mipLevel: 0, slice: 0, width: 1, height: 1, bytesPerRow: 4, bytes: raw)
-            }
+            try Self.writeTexture(device, white, width: 1, height: 1, pixels: [255, 255, 255, 255])
             whiteTexture = white
             sampler = try device.createSampler(
                 CajuSamplerDescriptor(addressU: .repeat, addressV: .repeat, addressW: .repeat))
         } catch {
-            throw .rhi(error as? CajuRHIError ?? .outOfMemory)
+            throw .rhi(error)
         }
         materials[0] = ResidentMaterial(
             generation: 0, asset: .fallback, texture: whiteTexture, pipeline: 0, queue: .opaque)
@@ -106,6 +103,34 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
     }
 
     private static func bytes(_ words: [UInt32]) -> [UInt8] { words.withUnsafeBytes { [UInt8]($0) } }
+
+    // Os *closures* de `withUnsafeBytes` não lançam erro tipado: converter um `throws(CajuRHIError)` para o
+    // `throws` sem tipo derruba o compilador do Swift 6.2 (CI). O erro sai por variável capturada.
+    private static func writeBuffer<T>(_ device: Device, _ buffer: CajuBufferHandle, _ values: [T])
+        throws(CajuRHIError)
+    {
+        var failure: CajuRHIError?
+        values.withUnsafeBytes { raw in
+            do throws(CajuRHIError) { try device.writeBuffer(buffer, offset: 0, bytes: raw) } catch {
+                failure = error
+            }
+        }
+        if let failure { throw failure }
+    }
+
+    private static func writeTexture(
+        _ device: Device, _ texture: CajuTextureHandle, width: Int, height: Int, pixels: [UInt8]
+    ) throws(CajuRHIError) {
+        var failure: CajuRHIError?
+        pixels.withUnsafeBytes { raw in
+            do throws(CajuRHIError) {
+                try device.writeTexture(
+                    texture, mipLevel: 0, slice: 0, width: width, height: height, bytesPerRow: width * 4,
+                    bytes: raw)
+            } catch { failure = error }
+        }
+        if let failure { throw failure }
+    }
 
     // MARK: Pipelines (cache em memória)
 
@@ -178,17 +203,13 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
             let indexBuffer = try device.createBuffer(
                 CajuBufferDescriptor(size: indexBytes, usage: .index, storage: .shared, label: "mesh.indices")
             )
-            try mesh.vertices.withUnsafeBytes { raw throws(CajuRHIError) in
-                try device.writeBuffer(vertexBuffer, offset: 0, bytes: raw)
-            }
-            try mesh.indices.withUnsafeBytes { raw throws(CajuRHIError) in
-                try device.writeBuffer(indexBuffer, offset: 0, bytes: raw)
-            }
+            try Self.writeBuffer(device, vertexBuffer, mesh.vertices)
+            try Self.writeBuffer(device, indexBuffer, mesh.indices)
             meshes[slot] = ResidentMesh(
                 generation: handle.generation, vertexBuffer: vertexBuffer, indexBuffer: indexBuffer,
                 indexCount: mesh.indices.count)
         } catch {
-            throw .rhi(error as? CajuRHIError ?? .outOfMemory)
+            throw .rhi(error)
         }
     }
 
@@ -236,15 +257,12 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
                     format: asset.isSRGB ? .rgba8UnormSRGB : .rgba8Unorm, width: asset.width,
                     height: asset.height,
                     usage: [.sampled, .copyDestination], label: "material.baseColor"))
-            try asset.pixels.withUnsafeBytes { raw throws(CajuRHIError) in
-                try device.writeTexture(
-                    texture, mipLevel: 0, slice: 0, width: asset.width, height: asset.height,
-                    bytesPerRow: asset.width * 4, bytes: raw)
-            }
+            try Self.writeTexture(
+                device, texture, width: asset.width, height: asset.height, pixels: asset.pixels)
             textures[slot] = ResidentTexture(generation: handle.generation, texture: texture)
             return texture
         } catch {
-            throw .rhi(error as? CajuRHIError ?? .outOfMemory)
+            throw .rhi(error)
         }
     }
 

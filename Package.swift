@@ -157,7 +157,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "CajuBenchmarks",
-            dependencies: ["CajuMath", "CajuCore", "CajuUILayout", "CajuPhysicsSpatial"],
+            dependencies: [
+                "CajuMath", "CajuCore", "CajuUILayout", "CajuPhysicsSpatial", "CajuScene", "CajuAssets",
+                "CajuRender",
+            ],
             swiftSettings: common
         ),
 

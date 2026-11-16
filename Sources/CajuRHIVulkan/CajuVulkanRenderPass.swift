@@ -162,13 +162,21 @@
             }
 
             let renderPass = try self.renderPass(for: key)
-            let framebuffer = try withUnsafeBytes(of: &views) { raw throws(CajuRHIError) in
-                try self.framebuffer(
-                    renderPass: renderPass,
-                    views: UnsafeBufferPointer(
-                        start: raw.baseAddress?.assumingMemoryBound(to: VkImageView?.self), count: viewCount),
-                    width: width, height: height)
+            // Sem `throws` tipado no *closure* (o Swift 6.2 cai ao converter para `withUnsafeBytes`).
+            let made: Result<VkFramebuffer, CajuRHIError> = withUnsafeBytes(of: &views) { raw in
+                do throws(CajuRHIError) {
+                    return .success(
+                        try self.framebuffer(
+                            renderPass: renderPass,
+                            views: UnsafeBufferPointer(
+                                start: raw.baseAddress?.assumingMemoryBound(to: VkImageView?.self),
+                                count: viewCount),
+                            width: width, height: height))
+                } catch {
+                    return .failure(error)
+                }
             }
+            let framebuffer = try made.get()
 
             withUnsafeBytes(of: &clears) { raw in
                 var begin = VkRenderPassBeginInfo()

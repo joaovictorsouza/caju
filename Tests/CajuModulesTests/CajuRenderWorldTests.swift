@@ -139,3 +139,89 @@ struct CajuRenderWorldTests {
         #expect(list.items.map(\.key) == keys.sorted())
     }
 }
+
+@Suite("CajuRender: quadro completo no dispositivo null (R-1a)")
+struct CajuSceneRendererNullTests {
+    @Test func ecsToDrawListThroughNullDevice() throws {
+        let assets = FakeAssetServer()
+        let world = CajuWorld()
+        let cube = assets.put(CajuMeshAsset.cube())
+        let sphere = assets.pending(CajuMeshAsset.self)  // ainda carregando: não desenha
+        let material = assets.put(CajuMaterialAsset(model: .unlit))
+        let pendingMaterial = assets.pending(CajuMaterialAsset.self)  // usa o substituto
+        _ = try world.spawn(
+            CajuGlobalTransform(.translation(CajuVec3(0, 0, -4))),
+            CajuRenderMesh(mesh: cube, material: material))
+        _ = try world.spawn(
+            CajuGlobalTransform(.translation(CajuVec3(1, 0, -4))),
+            CajuRenderMesh(mesh: cube, material: pendingMaterial))
+        _ = try world.spawn(
+            CajuGlobalTransform(.translation(CajuVec3(-1, 0, -4))),
+            CajuRenderMesh(mesh: sphere, material: material))
+        _ = try world.spawn(CajuGlobalTransform(.identity), CajuCamera())
+
+        let device = CajuNullDevice()
+        let renderer = try CajuSceneRenderer(device: device, colorFormat: .bgra8UnormSRGB)
+        let render = CajuRenderWorld(capacity: 16)
+        let target = try device.createTexture(
+            CajuTextureDescriptor(format: .bgra8UnormSRGB, width: 32, height: 32, usage: .renderTarget))
+        for _ in 0..<3 {
+            try render.extract(from: world, assets: assets)
+            try renderer.prepare(world: render, assets: assets)
+            var commands = try device.queue.makeCommandBuffer(label: "quadro")
+            try renderer.record(world: render, into: &commands, target: target, width: 32, height: 32)
+            try device.queue.submit(commands)
+        }
+        #expect(render.count == 3)
+        #expect(renderer.drawList.items.count == 2)
+        #expect(renderer.residentMeshCount == 1)
+        #expect(renderer.pipelineCount == 2)  // PBR substituto + unlit
+    }
+}
+
+#if canImport(Darwin)
+    import Darwin
+
+    @Suite("CajuRender: sem alocação no quadro estável (R-1a)")
+    struct CajuRenderAllocationTests {
+        private func liveBlocks() -> UInt32 {
+            var stats = malloc_statistics_t()
+            malloc_zone_statistics(nil, &stats)
+            return stats.blocks_in_use
+        }
+
+        /// Extração e draw list de 500 entidades, 200 quadros depois do aquecimento: os blocos vivos do
+        /// `malloc` não crescem (quadro estável sem alocação; `performance.md` regra 1). A folga de 100 blocos
+        /// absorve outros testes rodando em paralelo; um vazamento de 1 bloco por quadro daria 200.
+        @Test func extractionAndDrawListDoNotGrowTheHeap() throws {
+            let assets = FakeAssetServer()
+            let mesh = assets.put(CajuMeshAsset.cube())
+            let material = assets.put(CajuMaterialAsset())
+            let world = CajuWorld()
+            for i in 0..<500 {
+                _ = try world.spawn(
+                    CajuGlobalTransform(.translation(CajuVec3(Float(i % 25) - 12, 0, -Float(i / 25) - 2))),
+                    CajuRenderMesh(mesh: mesh, material: material))
+            }
+            _ = try world.spawn(CajuGlobalTransform(.identity), CajuCamera(far: 500))
+            let render = CajuRenderWorld(capacity: 512)
+            var list = CajuDrawList(capacity: 512)
+            func frame() throws {
+                try render.extract(from: world, assets: assets)
+                guard let view = render.makeView(aspect: 1) else { return }
+                try list.build(from: render, view: view) { mesh, material in
+                    CajuResolvedDraw(
+                        mesh: CajuRenderMeshID(index: mesh.index, generation: 1),
+                        material: CajuRenderMaterialID(index: material.index, generation: 1), queue: .opaque,
+                        pipeline: 0)
+                }
+            }
+            for _ in 0..<5 { try frame() }
+            let before = liveBlocks()
+            for _ in 0..<200 { try frame() }
+            let after = liveBlocks()
+            #expect(Int(after) - Int(before) < 100, "blocos vivos: \(before) → \(after)")
+            #expect(list.items.count > 0)
+        }
+    }
+#endif

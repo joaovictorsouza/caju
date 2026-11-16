@@ -1,8 +1,11 @@
 // Harness de benchmark do Caju (M0). Saída em JSON no stdout para versionar e comparar no CI.
 // Uso: swift run -c release caju-bench
+import CajuAssets
 import CajuCore
 import CajuMath
 import CajuPhysicsSpatial
+import CajuRender
+import CajuScene
 import CajuUILayout
 
 #if canImport(Glibc)
@@ -262,6 +265,66 @@ do {
     }
 }
 
+// MARK: - CajuRender: extração e draw list (R-1a; ADR 0023)
+
+/// Servidor de assets fixo para o benchmark (sem carga).
+final class BenchAssets: CajuAssetServing {
+    let mesh = CajuMeshAsset.cube()
+    let material = CajuMaterialAsset()
+    func load<A: CajuAsset>(_ type: A.Type, path: CajuAssetPath) -> CajuAssetHandle<A> { .invalid }
+    func state<A: CajuAsset>(of handle: CajuAssetHandle<A>) -> CajuAssetState { .loaded }
+    func value<A: CajuAsset>(of handle: CajuAssetHandle<A>) -> A? {
+        if A.self == CajuMeshAsset.self { return mesh as? A }
+        return material as? A
+    }
+    func error<A: CajuAsset>(of handle: CajuAssetHandle<A>) -> CajuAssetError? { nil }
+    func revision<A: CajuAsset>(of handle: CajuAssetHandle<A>) -> UInt32 { 1 }
+    func retain<A: CajuAsset>(_ handle: CajuAssetHandle<A>) -> Bool { true }
+    func release<A: CajuAsset>(_ handle: CajuAssetHandle<A>) -> Bool { true }
+    func reload(path: CajuAssetPath) {}
+    func applyCompletions() {}
+    func drainEvents(_ body: (CajuAssetEvent) -> Void) {}
+}
+
+var renderResults: [Result] = []
+do {
+    let assets = BenchAssets()
+    for count in [1_000, 10_000] {
+        let scene = CajuWorld()
+        scene.reserve(entities: count + 1)
+        for i in 0..<count {
+            let x = Float(i % 100) - 50
+            let z = -Float(i / 100) - 2
+            _ = try? scene.spawn(
+                CajuGlobalTransform(.translation(CajuVec3(x, 0, z))),
+                CajuRenderMesh(
+                    mesh: CajuAssetHandle(index: 0, generation: 1),
+                    material: CajuAssetHandle(index: UInt32(i % 8), generation: 1)))
+        }
+        _ = try? scene.spawn(CajuGlobalTransform(.identity), CajuCamera(far: 1000))
+        let render = CajuRenderWorld(capacity: count)
+        renderResults.append(
+            measureBatch("render.extract(\(count))", ops: count) {
+                try? render.extract(from: scene, assets: assets)
+                return Float(render.count)
+            })
+        var list = CajuDrawList(capacity: count)
+        if let view = render.makeView(aspect: 1) {
+            renderResults.append(
+                measureBatch("render.drawList(cull+sort, \(count))", ops: count) {
+                    try? list.build(from: render, view: view) { mesh, material in
+                        CajuResolvedDraw(
+                            mesh: CajuRenderMeshID(index: mesh.index, generation: 1),
+                            material: CajuRenderMaterialID(index: material.index, generation: 1),
+                            queue: .opaque,
+                            pipeline: material.index % 2)
+                    }
+                    return Float(list.items.count)
+                })
+        }
+    }
+}
+
 func emit(_ suite: String, _ results: [Result], last: Bool) {
     print("{\"suite\":\"\(suite)\",\"results\":[")
     for (i, r) in results.enumerated() {
@@ -275,4 +338,5 @@ func emit(_ suite: String, _ results: [Result], last: Bool) {
 emit("CajuMath", mathResults, last: false)
 emit("CajuUILayout", layoutResults, last: false)
 emit("CajuCore", ecsResults, last: false)
-emit("CajuPhysicsSpatial", spatialResults, last: true)
+emit("CajuPhysicsSpatial", spatialResults, last: false)
+emit("CajuRender", renderResults, last: true)

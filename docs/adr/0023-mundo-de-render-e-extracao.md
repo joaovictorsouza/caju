@@ -1,6 +1,6 @@
 # ADR 0023: Mundo de render separado, extração e draw list (R-1)
 
-**Status:** Proposto (esboço publicado com o contrato em PR draft; vira Aceito no merge do contrato). Implementa o ADR 0001 (RHI próprio) e o ADR 0015 (frame graph); não os substitui.
+**Status:** Aceito (contrato mergeado no PR #39 da Onda 1; R-1a implementada em 2026-11-16, ver "Implementação da R-1a"). Implementa o ADR 0001 (RHI próprio) e o ADR 0015 (frame graph); não os substitui.
 
 ## Contexto
 A Onda 1 ([brief](../briefs/onda-1.md)) pede render completo no `CajuRender`: unlit + PBR simples, luz direcional, 1 sombra, instancing e skinning, sobre o RHI e o frame graph do ADR 0015. A-1 (handles), AN-1 (pose) e U-1b (passe de UI) dependem do formato que R-1 decidir, então o contrato precisa sair antes do código. Detalhe e tabelas: [briefs/r-1-contrato.md](../briefs/r-1-contrato.md).
@@ -21,6 +21,15 @@ A Onda 1 ([brief](../briefs/onda-1.md)) pede render completo no `CajuRender`: un
 - **Divisão:** R-1a (extração, unlit/PBR, luz, câmera, cull, PSO em memória) e R-1b (sombra, instancing, skinning, PSO persistido). R-1a não espera AN-1.
 - **Este PR não muda `Package.swift`;** a mudança de dependências acima vai no PR único final da Onda 1 (nenhuma dependência externa nova).
 
+## Implementação da R-1a (2026-11-16)
+- **Assets de render em CPU** em `CajuRender` (`CajuMeshAsset`, `CajuMaterialAsset`, `CajuTextureAsset`): `CajuAssets` segue sem conhecer render nem RHI; os *loaders* de glTF/KTX2 produzem esses valores.
+- **Componentes:** `CajuRenderMesh` (ID 8), `CajuCamera` (ID 10, maior `priority` vence) e `CajuDirectionalLightSource` (ID 11, a de maior intensidade vence; direção explícita ou `-Z` do transform).
+- **Residência** (`CajuSceneRenderer`): tabelas indexadas por `handle.index`, validadas por `generation`, alimentadas por `drainEvents` (`unloaded`/`reloaded` descartam); malha que não carregou não é desenhada, material que não carregou usa o substituto (PBR branco). Upload sob `CajuUploadBudget` (4 MB por quadro).
+- **Passe `main`:** cor e profundidade MSAA 4x por `transientTexture` (slots −1 e −2, `memoryless` quando há) resolvidas no alvo. O *frame graph* de cena completo (encaixe de `shadow` e da UI) entra com a R-1b; por ora a topologia é fixa.
+- **PSO em memória** por `(modelo, alphaMode, doubleSided)`; a chave da draw list usa o índice do pipeline e o do material residente.
+- **Shaders:** GLSL em `Shaders/CajuRender` → SPIR-V gerado (`scripts/compile-scene-shaders.sh`) e MSL equivalente à mão, até o pipeline Slang (ADR 0001).
+- **Medidas:** extração 81 ns/entidade e draw list (cull + radix) 12 ns/item com 1 000 entidades no Mac M-series (`caju-bench`, release); sem crescimento do heap em 200 quadros estáveis (teste com `malloc_zone_statistics`). Golden de cena (`CajuSceneGolden`) gravado do Metal; o Vulkan roda o mesmo pelo executável de conformidade.
+
 ## Alternativas
 - **Desenhar direto do ECS** (sem mundo de render): menos código inicial, mas acopla o desenho a arquétipos, impede sobrepor jogo e render e dificulta testes headless.
 - **Cola de aplicação entre A-1 e R-1** (rascunho inicial): peça de integração sem dono que todo jogo reescreveria; rejeitada após comparar com Bevy, Godot, Filament e Unity.
@@ -30,7 +39,7 @@ A Onda 1 ([brief](../briefs/onda-1.md)) pede render completo no `CajuRender`: un
 - **Extração diferencial desde o início:** mais complexa; só com benchmark.
 
 ## Consequências
-- Cada quadro paga uma cópia de extração (custo medido no benchmark de R-1a `(?)`); em troca o desenho é linear e testável sem ECS.
+- Cada quadro paga uma cópia de extração (81 ns por entidade no Mac; aparelho `(?)`); em troca o desenho é linear e testável sem ECS.
 - Mudar o formato de `CajuDrawKey` ou `CajuRenderWorld` depois de A-1/AN-1/U-1b consumirem exige novo ADR.
 - `CajuRender` fica acoplado a `CajuAssets` (e a A-1 não precisa de GPU); AN-1 não conhece render nem malhas.
 - Verificação deste contrato só pelo CI (sem Swift na nuvem); números marcados `(?)`.
