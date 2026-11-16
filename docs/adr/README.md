@@ -31,6 +31,7 @@ Uma página curta por decisão. Formato: **Status**, **Contexto**, **Decisão**,
 | [0023](0023-mundo-de-render-e-extracao.md) | R-1: mundo de render separado, extração e draw list | Proposto |
 | [0026](0026-ui-display-list-e-dsl.md) | Display list da UI e contrato da DSL (U-1) | Proposto |
 | [0027](0027-formato-de-pose-e-fronteira-r1b.md) | AN-1: formato de pose em espaço do modelo, arena e fronteira com R-1b | Proposto |
+| [0028](0028-audio-miniaudio.md) | Política de áudio e dependência sobre miniaudio (AU-1) | Aceito |
 | [0030](0030-macro-component.md) | Macro `@Component(id:)` com `swift-syntax` | Aceito |
 
 **Números reservados:** 0016 (P-1, nunca escrito, não reutilizar); 0020 a 0029 para a Onda 1 (ver [briefs/onda-1.md](../briefs/onda-1.md)); usar só se houver decisão (0026 já em uso, Proposto, pelo contrato U-1). O 0030 é da macro `@Component` (PR #20, fora das trilhas da Onda 1).
