@@ -9,6 +9,8 @@
     @Suite("CajuRender: golden de cena no Metal (R-1a)", .enabled(if: MTLCreateSystemDefaultDevice() != nil))
     struct CajuSceneGoldenMetalTests {
         @Test func sceneMatchesReference() throws {
+            metalAllocationLock.lock()
+            defer { metalAllocationLock.unlock() }
             let device = try CajuMetalDevice.makeSystemDefault()
             let bytes = try CajuSceneGolden.render(device: device) { texture throws(CajuRHIError) in
                 try device.readTexture(texture)

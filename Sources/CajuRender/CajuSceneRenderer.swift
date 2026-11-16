@@ -53,6 +53,16 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
     private var materials: [ResidentMaterial?]
     private var textures: [ResidentTexture?]
 
+    /// Instancing (R-1b): matrizes do quadro num buffer `storage` por quadro em voo (3, rotativos); itens
+    /// consecutivos da draw list com a mesma malha e material viram um `drawIndexed(instanceCount:)`.
+    static var framesInFlight: Int { 3 }
+    private var instanceBuffers: [CajuBufferHandle] = []
+    private var instanceData: [InstanceData] = []
+    private var batches: [(first: Int, count: Int, item: Int)] = []
+    private var frameIndex = 0
+    /// Draw calls do último `record` (orçamento de 300 por quadro de cena; `performance.md`).
+    public private(set) var lastDrawCalls = 0
+
     public init(
         device: Device, colorFormat: CajuPixelFormat, sampleCount: Int = 4, drawCapacity: Int = 4096,
         residentCapacity: Int = 1024
@@ -64,6 +74,8 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
         meshes = Array(repeating: nil, count: residentCapacity)
         materials = Array(repeating: nil, count: residentCapacity + 1)
         textures = Array(repeating: nil, count: residentCapacity)
+        instanceData.reserveCapacity(drawList.capacity)
+        batches.reserveCapacity(drawList.capacity)
         do {
             let shaders: (vertex: CajuShaderModuleDescriptor, fragment: CajuShaderModuleDescriptor)
             if device.capabilities.backendName == "Vulkan" {
@@ -92,6 +104,14 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
                     label: "white"))
             try Self.writeTexture(device, white, width: 1, height: 1, pixels: [255, 255, 255, 255])
             whiteTexture = white
+            for _ in 0..<Self.framesInFlight {
+                instanceBuffers.append(
+                    try device.createBuffer(
+                        CajuBufferDescriptor(
+                            size: drawCapacity * MemoryLayout<InstanceData>.stride, usage: .storage,
+                            storage: .shared,
+                            label: "scene.instances")))
+            }
             sampler = try device.createSampler(
                 CajuSamplerDescriptor(addressU: .repeat, addressV: .repeat, addressW: .repeat))
         } catch {
@@ -100,6 +120,17 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
         materials[0] = ResidentMaterial(
             generation: 0, asset: .fallback, texture: whiteTexture, pipeline: 0, queue: .opaque)
         materials[0]?.pipeline = try pipeline(for: CajuMaterialAsset.fallback)
+    }
+
+    deinit {
+        for buffer in instanceBuffers { device.destroy(buffer) }
+        for index in meshes.indices { evictMesh(index: index) }
+        for index in textures.indices { evictTexture(index: index) }
+        for pipeline in pipelines { device.destroy(pipeline) }
+        device.destroy(whiteTexture)
+        device.destroy(sampler)
+        device.destroy(vertex.module)
+        if fragment.module != vertex.module { device.destroy(fragment.module) }
     }
 
     private static func bytes(_ words: [UInt32]) -> [UInt8] { words.withUnsafeBytes { [UInt8]($0) } }
@@ -351,6 +382,29 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
             throw .rhi(error)
         }
 
+        // Lotes de instâncias: itens consecutivos (já ordenados) com a mesma malha e material.
+        instanceData.removeAll(keepingCapacity: true)
+        batches.removeAll(keepingCapacity: true)
+        let sortedItems = drawList.items
+        for (i, item) in sortedItems.enumerated() {
+            let model = world.worldMatrices[Int(item.instanceIndex)]
+            instanceData.append(
+                InstanceData(model: model, normalMatrix: model.inverseAffine?.transposed ?? model))
+            if let last = batches.last, sortedItems[last.item].mesh == item.mesh,
+                sortedItems[last.item].material == item.material
+            {
+                batches[batches.count - 1].count += 1
+            } else {
+                batches.append((first: i, count: 1, item: i))
+            }
+        }
+        let instanceBuffer = instanceBuffers[frameIndex % Self.framesInFlight]
+        frameIndex &+= 1
+        if !instanceData.isEmpty {
+            do { try Self.writeBuffer(device, instanceBuffer, instanceData) } catch { throw .rhi(error) }
+        }
+        lastDrawCalls = view == nil ? 0 : batches.count
+
         let pass = CajuRenderPassDescriptor(
             colorAttachments: [color],
             depthAttachment: CajuDepthAttachment(
@@ -358,16 +412,16 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
             label: "main")
         let light = world.light
         let ambient = world.ambient
-        let items = drawList.items
-        let worldMatrices = world.worldMatrices
         let pipelines = self.pipelines
         let meshes = self.meshes
         let materials = self.materials
         let sampler = self.sampler
+        let batches = self.batches
         do {
             try commands.withRenderPass(pass) { encoder in
                 guard let view else { return }
                 var boundPipeline = UInt32.max
+                var frame = view.viewProjection
                 var materialUniforms = MaterialUniforms()
                 materialUniforms.ambient = SIMD4(ambient.r, ambient.g, ambient.b, 0)
                 materialUniforms.cameraPosition = SIMD4(view.position.storage, 1)
@@ -378,18 +432,17 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
                         light.color.r * light.intensity, light.color.g * light.intensity,
                         light.color.b * light.intensity, 0)
                 }
-                for item in items {
+                for batch in batches {
+                    let item = sortedItems[batch.item]
                     guard let mesh = meshes[Int(item.mesh.index)],
                         let material = materials[Int(item.material.index)]
                     else { continue }
                     if material.pipeline != boundPipeline {
                         encoder.setPipeline(pipelines[Int(material.pipeline)])
                         boundPipeline = material.pipeline
+                        withUnsafeBytes(of: &frame) { encoder.setBytes($0, index: 0, stage: .vertex) }
+                        encoder.setBuffer(instanceBuffer, offset: 0, index: 1, stage: .vertex)
                     }
-                    let model = worldMatrices[Int(item.instanceIndex)]
-                    var object = ObjectUniforms(
-                        viewProjection: view.viewProjection, model: model,
-                        normalMatrix: model.inverseAffine?.transposed ?? model)
                     let asset = material.asset
                     materialUniforms.baseColor = SIMD4(
                         asset.baseColor.r, asset.baseColor.g, asset.baseColor.b, asset.baseColor.a)
@@ -398,15 +451,15 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
                         asset.metallic, asset.roughness, asset.alphaMode == .mask ? asset.alphaCutoff : 0,
                         asset.model == .pbr ? 1 : 0)
                     encoder.setVertexBuffer(mesh.vertexBuffer, offset: 0, index: 0)
-                    withUnsafeBytes(of: &object) { encoder.setBytes($0, index: 0, stage: .vertex) }
                     withUnsafeBytes(of: &materialUniforms) {
                         encoder.setBytes($0, index: 0, stage: .fragment)
                     }
                     encoder.setTexture(material.texture, index: 0, stage: .fragment)
                     encoder.setSampler(sampler, index: 0, stage: .fragment)
                     encoder.drawIndexed(
-                        indexCount: mesh.indexCount, instanceCount: 1, indexBuffer: mesh.indexBuffer,
-                        indexType: .uint32, indexOffset: 0, baseVertex: 0, firstInstance: 0)
+                        indexCount: mesh.indexCount, instanceCount: batch.count,
+                        indexBuffer: mesh.indexBuffer,
+                        indexType: .uint32, indexOffset: 0, baseVertex: 0, firstInstance: batch.first)
                 }
             }
         } catch {
@@ -415,9 +468,8 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
     }
 }
 
-/// `ObjectUniforms` dos shaders de cena (3 × `float4x4`, 192 bytes).
-struct ObjectUniforms {
-    var viewProjection: CajuMat4
+/// `Instance` dos shaders de cena (2 × `float4x4`, 128 bytes, layout std430).
+struct InstanceData {
     var model: CajuMat4
     var normalMatrix: CajuMat4
 }

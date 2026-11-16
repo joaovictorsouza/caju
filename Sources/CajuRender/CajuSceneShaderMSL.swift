@@ -1,7 +1,8 @@
 /// MSL dos shaders de cena (Metal), equivalente a `Shaders/CajuRender/scene.{vert,frag}`: mesmos uniformes,
 /// mesma matemática. Mantido à mão até o pipeline Slang (ADR 0001); qualquer mudança vale para os dois.
 ///
-/// Ligações (contrato do RHI): vértice `buffer(0)` = `ObjectUniforms` (`setBytes(index: 0, stage: .vertex)`),
+/// Ligações (contrato do RHI): vértice `buffer(0)` = `FrameUniforms` (`setBytes(index: 0, stage: .vertex)`),
+/// vértice `buffer(1)` = instâncias (`setBuffer(index: 1, stage: .vertex)`; `instance_id` inclui a base),
 /// fragmento `buffer(0)` = `MaterialUniforms`, `texture(0)`/`sampler(0)` = cor base. O fluxo de vértices é o
 /// `setVertexBuffer(index: 0)`, que o backend Metal põe na posição 30.
 enum CajuSceneShaderMSL {
@@ -15,8 +16,11 @@ enum CajuSceneShaderMSL {
             float2 uv [[attribute(2)]];
         };
 
-        struct ObjectUniforms {
+        struct FrameUniforms {
             float4x4 viewProjection;
+        };
+
+        struct Instance {
             float4x4 model;
             float4x4 normalMatrix;
         };
@@ -38,13 +42,17 @@ enum CajuSceneShaderMSL {
             float2 uv;
         };
 
-        vertex VertexOut caju_scene_vs(VertexIn in [[stage_in]], constant ObjectUniforms& object [[buffer(0)]]) {
+        vertex VertexOut caju_scene_vs(
+            VertexIn in [[stage_in]], constant FrameUniforms& frame [[buffer(0)]],
+            const device Instance* instances [[buffer(1)]], uint instanceID [[instance_id]]
+        ) {
             VertexOut out;
-            float4 world = object.model * float4(in.position, 1.0);
+            Instance instance = instances[instanceID];
+            float4 world = instance.model * float4(in.position, 1.0);
             out.worldPosition = world.xyz;
-            out.normal = (object.normalMatrix * float4(in.normal, 0.0)).xyz;
+            out.normal = (instance.normalMatrix * float4(in.normal, 0.0)).xyz;
             out.uv = in.uv;
-            out.position = object.viewProjection * world;
+            out.position = frame.viewProjection * world;
             return out;
         }
 

@@ -3,11 +3,14 @@
     import CajuRHIConformance
     import CajuRHIMetal
     import Darwin
+    import Foundation
     import Metal
     import QuartzCore
     import Testing
 
     private let metalAvailable = MTLCreateSystemDefaultDevice() != nil
+    /// Serializa testes que medem ou fazem alocações grandes no MTLDevice compartilhado.
+    let metalAllocationLock = NSLock()
 
     private let testShaders = """
         #include <metal_stdlib>
@@ -189,6 +192,9 @@
 
         /// Frame graph no Metal: MSAA e profundidade viram memoryless e os transientes são reutilizados.
         @Test func frameGraphExecutesWithStableMemory() throws {
+            // `allocatedBytes` é do MTLDevice inteiro: outros testes de GPU não podem alocar ao mesmo tempo.
+            metalAllocationLock.lock()
+            defer { metalAllocationLock.unlock() }
             let scene = try makeScene()
             let device = scene.device
             var g = CajuFrameGraphBuilder()

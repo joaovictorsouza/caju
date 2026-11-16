@@ -176,6 +176,34 @@ struct CajuSceneRendererNullTests {
         #expect(renderer.drawList.items.count == 2)
         #expect(renderer.residentMeshCount == 1)
         #expect(renderer.pipelineCount == 2)  // PBR substituto + unlit
+        #expect(renderer.lastDrawCalls == 2)
+    }
+
+    /// 100 cubos com a mesma malha e material viram 1 draw call (instancing, R-1b).
+    @Test func identicalItemsAreInstanced() throws {
+        let assets = FakeAssetServer()
+        let cube = assets.put(CajuMeshAsset.cube())
+        let material = assets.put(CajuMaterialAsset())
+        let other = assets.put(CajuMaterialAsset(baseColor: CajuColor(r: 1, g: 0, b: 0)))
+        let render = CajuRenderWorld(capacity: 128)
+        render.camera = (.identity, CajuCamera(far: 500))
+        for i in 0..<100 {
+            try render.append(
+                world: .translation(CajuVec3(Float(i % 10) - 5, Float(i / 10) - 5, -20)),
+                localBounds: CajuMeshAsset.cube().bounds, mesh: cube, material: material)
+        }
+        try render.append(
+            world: .translation(CajuVec3(0, 0, -10)), localBounds: CajuMeshAsset.cube().bounds, mesh: cube,
+            material: other)
+        let device = CajuNullDevice()
+        let renderer = try CajuSceneRenderer(device: device, colorFormat: .bgra8UnormSRGB)
+        let target = try device.createTexture(
+            CajuTextureDescriptor(format: .bgra8UnormSRGB, width: 32, height: 32, usage: .renderTarget))
+        try renderer.prepare(world: render, assets: assets)
+        var commands = try device.queue.makeCommandBuffer(label: "quadro")
+        try renderer.record(world: render, into: &commands, target: target, width: 32, height: 32)
+        #expect(renderer.drawList.items.count == 101)
+        #expect(renderer.lastDrawCalls == 2)
     }
 }
 
@@ -191,8 +219,8 @@ struct CajuSceneRendererNullTests {
         }
 
         /// Extração e draw list de 500 entidades, 200 quadros depois do aquecimento: os blocos vivos do
-        /// `malloc` não crescem (quadro estável sem alocação; `performance.md` regra 1). A folga de 100 blocos
-        /// absorve outros testes rodando em paralelo; um vazamento de 1 bloco por quadro daria 200.
+        /// `malloc` não crescem (quadro estável sem alocação; `performance.md` regra 1). Fica a menor de 3
+        /// rodadas (testes paralelos mexem no heap); um vazamento de 1 bloco por quadro daria 200.
         @Test func extractionAndDrawListDoNotGrowTheHeap() throws {
             let assets = FakeAssetServer()
             let mesh = assets.put(CajuMeshAsset.cube())
@@ -217,10 +245,14 @@ struct CajuSceneRendererNullTests {
                 }
             }
             for _ in 0..<5 { try frame() }
-            let before = liveBlocks()
-            for _ in 0..<200 { try frame() }
-            let after = liveBlocks()
-            #expect(Int(after) - Int(before) < 100, "blocos vivos: \(before) → \(after)")
+            // Outros testes rodam em paralelo e mexem no heap: fica a menor variação de 3 rodadas.
+            var smallest = Int.max
+            for _ in 0..<3 {
+                let before = liveBlocks()
+                for _ in 0..<200 { try frame() }
+                smallest = min(smallest, Int(liveBlocks()) - Int(before))
+            }
+            #expect(smallest < 100, "menor variação de blocos vivos em 200 quadros: \(smallest)")
             #expect(list.items.count > 0)
         }
     }
