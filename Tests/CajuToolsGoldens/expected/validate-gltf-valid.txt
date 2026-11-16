@@ -1,0 +1,1 @@
+OK format=gltf version=2.0 scenes=1 nodes=2 meshes=1 materials=1 textures=1 images=1 accessors=3 bufferViews=2 buffers=1
