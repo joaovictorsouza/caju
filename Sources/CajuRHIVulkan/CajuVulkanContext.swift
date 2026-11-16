@@ -15,6 +15,9 @@
         let capabilities: CajuDeviceCapabilities
         let limits: VkPhysicalDeviceLimits
         let surfaceEnabled: Bool
+        /// `vkCmdPushDescriptorSetKHR` quando o aparelho tem `VK_KHR_push_descriptor` (caminho principal de
+        /// ligação de recursos; sem ela, o backend usa um *pool* de sets por submissão, ADR 0024).
+        let pushDescriptorSet: PFN_vkCmdPushDescriptorSetKHR?
 
         private let commandPool: VkCommandPool
         private var freeCommandBuffers: [VkCommandBuffer] = []
@@ -96,7 +99,9 @@
             queueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO
             queueInfo.queueFamilyIndex = family
             queueInfo.queueCount = 1
-            let deviceExtensions: [UnsafePointer<CChar>?] = enableSurface ? [vkName("VK_KHR_swapchain")] : []
+            let hasPushDescriptor = Self.hasDeviceExtension(physicalDevice, "VK_KHR_push_descriptor")
+            var deviceExtensions: [UnsafePointer<CChar>?] = enableSurface ? [vkName("VK_KHR_swapchain")] : []
+            if hasPushDescriptor { deviceExtensions.append(vkName("VK_KHR_push_descriptor")) }
             var createdDevice: VkDevice?
             let deviceResult: VkResult = deviceExtensions.withUnsafeBufferPointer { extensions in
                 withUnsafePointer(to: &priority) { priority in
@@ -122,6 +127,11 @@
             vkGetDeviceQueue(device, family, 0, &createdQueue)
             guard let queue = createdQueue else { throw .deviceLost }
             self.queue = queue
+            if hasPushDescriptor, let function = vkGetDeviceProcAddr(device, "vkCmdPushDescriptorSetKHR") {
+                pushDescriptorSet = unsafeBitCast(function, to: PFN_vkCmdPushDescriptorSetKHR.self)
+            } else {
+                pushDescriptorSet = nil
+            }
 
             // Pool de command buffers (um só: a fila é única e a thread é uma).
             var poolInfo = VkCommandPoolCreateInfo()
@@ -169,6 +179,24 @@
         }
 
         // MARK: Capacidades
+
+        private static func hasDeviceExtension(_ physicalDevice: VkPhysicalDevice, _ name: String) -> Bool {
+            var count: UInt32 = 0
+            guard vkEnumerateDeviceExtensionProperties(physicalDevice, nil, &count, nil) == VK_SUCCESS else {
+                return false
+            }
+            var properties = [VkExtensionProperties](repeating: VkExtensionProperties(), count: Int(count))
+            guard vkEnumerateDeviceExtensionProperties(physicalDevice, nil, &count, &properties) == VK_SUCCESS
+            else { return false }
+            return properties.contains { property in
+                var extensionName = property.extensionName
+                return withUnsafePointer(to: &extensionName) {
+                    $0.withMemoryRebound(to: CChar.self, capacity: Int(VK_MAX_EXTENSION_NAME_SIZE)) {
+                        String(cString: $0) == name
+                    }
+                }
+            }
+        }
 
         private static func makeCapabilities(
             physicalDevice: VkPhysicalDevice, properties: VkPhysicalDeviceProperties,

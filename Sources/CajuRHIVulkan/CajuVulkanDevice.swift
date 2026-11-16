@@ -18,6 +18,8 @@
         let descriptor: CajuTextureDescriptor
         let layers: UInt32
         var layout: VkImageLayout = VK_IMAGE_LAYOUT_UNDEFINED
+        /// *Views* 2D de um mip/camada usadas como attachment (chave `mip << 16 | camada`).
+        var attachmentViews: [Int: VkImageView] = [:]
         /// Imagem de *swapchain*: o *swapchain* é o dono (não destruir aqui).
         let ownsImage: Bool
 
@@ -32,14 +34,30 @@
             self.layers = layers
             self.ownsImage = ownsImage
         }
+
+        /// Layout de repouso entre passes (ADR 0024): amostráveis ficam prontas para leitura no shader, para
+        /// que `setTexture` dentro de um passe não precise de barreira; imagens do *swapchain*, prontas para
+        /// apresentar; attachments puros, no layout de attachment.
+        var restingLayout: VkImageLayout? {
+            if !ownsImage { return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR }
+            if descriptor.usage.contains(.sampled) { return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
+            if descriptor.usage.contains(.renderTarget) {
+                return descriptor.format.isDepth
+                    ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+                    : VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+            }
+            return nil
+        }
     }
 
     /// Objeto nativo cuja destruição espera a GPU terminar de usá-lo (ADR 0024).
     enum VulkanGarbage {
         case buffer(VkBuffer, VmaAllocation)
-        case image(VkImage, VkImageView, VmaAllocation?)
+        case texture(VulkanTexture)
         case sampler(VkSampler)
         case shader(VkShaderModule)
+        case pipeline(VkPipeline, VkPipelineLayout, VkDescriptorSetLayout)
+        case framebuffer(VkFramebuffer)
     }
 
     /// Dispositivo Vulkan do RHI (ADR 0001, 0015, 0024).
@@ -55,7 +73,20 @@
         var buffers = CajuHandlePool<CajuBufferTag, VulkanBuffer>()
         var textures = CajuHandlePool<CajuTextureTag, VulkanTexture>()
         var samplers = CajuHandlePool<CajuSamplerTag, VkSampler>()
-        var shaders = CajuHandlePool<CajuShaderTag, VkShaderModule>()
+        var shaders = CajuHandlePool<CajuShaderTag, VulkanShader>()
+        var renderPipelines = CajuHandlePool<CajuRenderPipelineTag, VulkanRenderPipeline>()
+        var renderPassCache: [VulkanRenderPassKey: VkRenderPass] = [:]
+        var framebufferCache: [VulkanFramebufferKey: VkFramebuffer] = [:]
+        /// Anel de `setBytes` (4 MB; ADR 0024).
+        let uniformRing: VulkanUniformRing
+        /// Recursos ligados no passe corrente, por *binding* do set 0 (estado do encoder de render, guardado
+        /// aqui para não alocar por passe).
+        var boundResources: [VulkanBoundResource]
+        /// Escritas de descritor montadas a cada *draw* (capacidade fixa, alocada uma vez).
+        let descriptorWrites: UnsafeMutablePointer<VkWriteDescriptorSet>
+        let descriptorBufferInfos: UnsafeMutablePointer<VkDescriptorBufferInfo>
+        let descriptorImageInfos: UnsafeMutablePointer<VkDescriptorImageInfo>
+        private var livePipelines: [UInt32: CajuRenderPipelineHandle] = [:]
         private var transients: [Int: [(descriptor: CajuTextureDescriptor, handle: CajuTextureHandle)]] = [:]
         /// Handles vivos por tipo: `CajuHandlePool` não é iterável, e o `deinit` precisa liberar tudo antes de
         /// destruir o alocador (o VMA aborta se sobrar alocação). Só muda na criação/destruição.
@@ -70,6 +101,11 @@
         public init(enableSurface: Bool = false) throws(CajuRHIError) {
             context = try CajuVulkanContext(enableSurface: enableSurface)
             capabilities = context.capabilities
+            uniformRing = try VulkanUniformRing(context: context, capacity: 4 << 20)
+            boundResources = [VulkanBoundResource](repeating: .none, count: CajuVulkanBindingMap.count)
+            descriptorWrites = .allocate(capacity: 32)
+            descriptorBufferInfos = .allocate(capacity: 32)
+            descriptorImageInfos = .allocate(capacity: 32)
             garbage.reserveCapacity(64)
         }
 
@@ -79,7 +115,14 @@
             for handle in liveBuffers.values { destroy(handle) }
             for handle in liveSamplers.values { destroy(handle) }
             for handle in liveShaders.values { destroy(handle) }
+            for handle in livePipelines.values { destroy(handle) }
+            for framebuffer in framebufferCache.values { retire(.framebuffer(framebuffer)) }
             collectGarbage(force: true)
+            for renderPass in renderPassCache.values { vkDestroyRenderPass(context.device, renderPass, nil) }
+            uniformRing.destroy()
+            descriptorWrites.deallocate()
+            descriptorBufferInfos.deallocate()
+            descriptorImageInfos.deallocate()
         }
 
         public var queue: CajuVulkanQueue { CajuVulkanQueue(device: self) }
@@ -105,16 +148,24 @@
             switch item {
             case .buffer(let buffer, let allocation):
                 vmaDestroyBuffer(context.allocator, buffer, allocation)
-            case .image(let image, let view, let allocation):
-                vkDestroyImageView(context.device, view, nil)
-                if let allocation { vmaDestroyImage(context.allocator, image, allocation) }
+            case .texture(let texture):
+                for view in texture.attachmentViews.values { vkDestroyImageView(context.device, view, nil) }
+                vkDestroyImageView(context.device, texture.view, nil)
+                if texture.ownsImage, let allocation = texture.allocation {
+                    vmaDestroyImage(context.allocator, texture.image, allocation)
+                }
             case .sampler(let sampler): vkDestroySampler(context.device, sampler, nil)
             case .shader(let module): vkDestroyShaderModule(context.device, module, nil)
+            case .pipeline(let pipeline, let layout, let setLayout):
+                vkDestroyPipeline(context.device, pipeline, nil)
+                vkDestroyPipelineLayout(context.device, layout, nil)
+                vkDestroyDescriptorSetLayout(context.device, setLayout, nil)
+            case .framebuffer(let framebuffer): vkDestroyFramebuffer(context.device, framebuffer, nil)
             }
         }
 
         /// Agenda a destruição para depois da última submissão enviada (que pode ainda referenciar o objeto).
-        private func retire(_ item: VulkanGarbage) {
+        func retire(_ item: VulkanGarbage) {
             if context.submittedSerial <= context.completedSerial {
                 destroyNow(item)
             } else {
@@ -130,7 +181,9 @@
         }
 
         /// Quantidade de recursos vivos de qualquer tipo (diagnóstico de vazamento).
-        public var liveResourceCount: Int { buffers.count + textures.count + samplers.count + shaders.count }
+        public var liveResourceCount: Int {
+            buffers.count + textures.count + samplers.count + shaders.count + renderPipelines.count
+        }
 
         /// Objetos nativos esperando a GPU terminar para serem destruídos.
         public var pendingDestructionCount: Int { garbage.count }
@@ -331,6 +384,18 @@
             guard !d.code.isEmpty, d.format == .spirv, d.code.count % 4 == 0 else {
                 throw .invalidDescriptor(.missingShader)
             }
+            let bindings: [CajuVulkanShaderReflection.Binding]
+            do {
+                bindings = try d.code.withUnsafeBytes {
+                    raw throws(CajuVulkanShaderReflection.ReflectionError) in
+                    try CajuVulkanShaderReflection.bindings(
+                        UnsafeBufferPointer(
+                            start: raw.baseAddress?.assumingMemoryBound(to: UInt32.self), count: raw.count / 4
+                        ))
+                }
+            } catch {
+                throw .invalidDescriptor(.missingShader)
+            }
             var module: VkShaderModule?
             let result: VkResult = d.code.withUnsafeBytes { raw in
                 var info = VkShaderModuleCreateInfo()
@@ -342,7 +407,7 @@
             }
             try vkCheck(result)
             guard let module else { throw .outOfMemory }
-            let handle = shaders.insert(module)
+            let handle = shaders.insert(VulkanShader(module: module, bindings: bindings))
             liveShaders[handle.index] = handle
             return handle
         }
@@ -350,7 +415,9 @@
         public func createRenderPipeline(_ d: CajuRenderPipelineDescriptor) throws(CajuRHIError)
             -> CajuRenderPipelineHandle
         {
-            throw .backend(code: cajuVulkanNotImplementedCode)  // fatia D da V-1
+            let handle = renderPipelines.insert(try makeRenderPipeline(d))
+            livePipelines[handle.index] = handle
+            return handle
         }
 
         public func createComputePipeline(_ d: CajuComputePipelineDescriptor) throws(CajuRHIError)
@@ -376,8 +443,8 @@
         public func destroy(_ texture: CajuTextureHandle) {
             guard let record = textures.remove(texture) else { return }
             liveTextures[texture.index] = nil
-            guard record.ownsImage else { return }
-            retire(.image(record.image, record.view, record.allocation))
+            evictFramebuffers(using: record)
+            retire(.texture(record))
         }
 
         public func destroy(_ sampler: CajuSamplerHandle) {
@@ -389,10 +456,14 @@
         public func destroy(_ shader: CajuShaderHandle) {
             guard let record = shaders.remove(shader) else { return }
             liveShaders[shader.index] = nil
-            retire(.shader(record))
+            retire(.shader(record.module))
         }
 
-        public func destroy(_ pipeline: CajuRenderPipelineHandle) {}
+        public func destroy(_ pipeline: CajuRenderPipelineHandle) {
+            guard let record = renderPipelines.remove(pipeline) else { return }
+            livePipelines[pipeline.index] = nil
+            retire(.pipeline(record.pipeline, record.layout, record.setLayout))
+        }
         public func destroy(_ pipeline: CajuComputePipelineHandle) {}
 
         // MARK: Upload e leitura
@@ -452,6 +523,7 @@
                 imageExtent: VkExtent3D(width: UInt32(width), height: UInt32(height), depth: 1))
             vkCmdCopyBufferToImage(
                 commandBuffer, staging.buffer, record.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region)
+            if let resting = record.restingLayout { transition(commandBuffer, record, to: resting) }
             let serial = try context.submit(commandBuffer)
             try context.wait(for: serial)
             collectGarbage()
@@ -491,6 +563,7 @@
             vkCmdPipelineBarrier(
                 commandBuffer, VkPipelineStageFlags(VK_PIPELINE_STAGE_TRANSFER_BIT.rawValue),
                 VkPipelineStageFlags(VK_PIPELINE_STAGE_HOST_BIT.rawValue), 0, 1, &barrier, 0, nil, 0, nil)
+            if let resting = record.restingLayout { transition(commandBuffer, record, to: resting) }
             let serial = try context.submit(commandBuffer)
             try context.wait(for: serial)
             collectGarbage()
