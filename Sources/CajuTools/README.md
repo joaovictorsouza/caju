@@ -44,21 +44,21 @@ swift run caju-tools manifest ./assets [-o manifesto.json]
 
 ## Arquitetura interna
 
-O código em `Sources/CajuTools/` separa o ponto de entrada das funções puras para facilitar a criação futura de um alvo de testes em Swift Testing sem reescrever lógica:
+O ponto de entrada (`Sources/CajuTools/main.swift`) é separado da lógica pura, que vive em `Sources/CajuToolsCore/` (testada por `Tests/CajuToolsTests` com `@testable import`):
 - `main.swift`: apenas lê `CommandLine.arguments`, chama `CajuToolsCLI.run` e encerra com `0`/`1`/`2`.
-- `CLI.swift`, `ToolsError.swift`, `ToolsSupport.swift`: roteamento, erros tipados (`CajuToolsError`), limites (`ToolsLimits`), leitor/escritor de bytes seguro, `ToolsSHA256` e serializador JSON determinístico.
+- Em `CajuToolsCore`: `CLI.swift`, `ToolsError.swift`, `ToolsSupport.swift`: roteamento, erros tipados (`CajuToolsError`), limites (`ToolsLimits`), leitor/escritor de bytes seguro, `ToolsSHA256` e serializador JSON determinístico.
 - `DeflateInflate.swift`, `PNGImageDecoder.swift`, `KTX2Texture.swift`: decodificação de imagens, geração e validação estrita de KTX 2.0.
 - `ValidateGLTFCommand.swift`: validador glTF 2.0 / GLB v2.
 - `ManifestCommand.swift`: varredura determinística e geração de manifesto.
 
 ## Como testar
 
-Como `CajuTools` ainda não possui um `.testTarget` em `Package.swift`, os testes de *golden*, determinismo (2 execuções comparadas byte a byte) e *fuzz* determinístico ficam em [`Tests/CajuToolsGoldens/`](../../Tests/CajuToolsGoldens/README.md) e rodam via:
+Testes nativos (Swift Testing) em `Tests/CajuToolsTests`: `swift test --filter CajuToolsCLITests`. Os testes de *golden*, determinismo (2 execuções comparadas byte a byte) e *fuzz* determinístico ficam no script abaixo, com entradas em `Tests/CajuToolsGoldens/`:
 
 ```sh
 scripts/test-caju-tools.sh
 ```
 
-## Mudanças futuras de `Package.swift` (para PR dedicado)
-- Extrair a lógica pura para uma biblioteca `CajuToolsCore` (ou habilitar `@testable import` em alvo de teste) e adicionar `.testTarget(name: "CajuToolsTests", ...)` com Swift Testing (`CajuTesting`).
+## Mudanças futuras de `Package.swift`
+- (Feito na integração da Onda 1: `CajuToolsCore` + `CajuToolsTests`.)
 - Opcionalmente adicionar dependência de `CajuAssetsCore` (reuso do parser glTF/PNG/KTX2 sem duplicação), `swift-argument-parser` e/ou encoder ASTC C encapsulado (seguindo ADR 0005).

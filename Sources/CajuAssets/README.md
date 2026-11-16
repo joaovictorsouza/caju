@@ -35,9 +35,8 @@ Regras que **não mudam sem novo ADR**: handle não é dono (posse explícita); 
 ## Dependências
 - `CajuCore`
 - `CajuAssetsCore`
-- `CajuRHI`
 
 ## Como testar
-Os testes ficam em `Tests/CajuModulesTests/` (`CajuAssetsContractTests.swift` e `CajuAssetServerTests.swift`) até existir o alvo `CajuAssetsTests`:
+Os testes ficam em `Tests/CajuAssetsTests/`:
 - `swift test --filter "CajuAssetsContractTests|CajuAssetServerTests"`
 - `swift test --sanitize=thread --filter "CajuAssetsContractTests|CajuAssetServerTests"`
