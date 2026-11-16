@@ -1,5 +1,6 @@
 #if canImport(Metal)
     import CajuRHI
+    import CajuRHIConformance
     import CajuRHIMetal
     import Darwin
     import Metal
@@ -55,6 +56,37 @@
     ) {
         let i = (y * width + x) * 4
         return (bytes[i], bytes[i + 1], bytes[i + 2], bytes[i + 3])
+    }
+
+    /// Backend Metal da suíte genérica de conformidade (`CajuRHIConformance`).
+    private struct MetalConformanceBackend: CajuConformanceBackend {
+        let device: CajuMetalDevice
+
+        func makeTriangleShaders() throws(CajuRHIError) -> (
+            vertex: CajuShaderFunction, fragment: CajuShaderFunction
+        ) {
+            let module = try device.createShaderModule(
+                CajuShaderModuleDescriptor(format: .metalSource, code: Array(testShaders.utf8), label: "test")
+            )
+            return (
+                CajuShaderFunction(module: module, entryPoint: "vs"),
+                CajuShaderFunction(module: module, entryPoint: "fs")
+            )
+        }
+
+        func readTexture(_ texture: CajuTextureHandle) throws(CajuRHIError) -> [UInt8] {
+            try device.readTexture(texture)
+        }
+    }
+
+    @Suite("CajuRHIMetal: suíte genérica de conformidade", .enabled(if: metalAvailable))
+    struct CajuMetalGenericConformanceTests {
+        @Test func sharedSuitePasses() throws {
+            let backend = MetalConformanceBackend(device: try CajuMetalDevice.makeSystemDefault())
+            let report = CajuRHIConformance.run(backend)
+            #expect(report.failures.isEmpty, "\(report.failures)")
+            #expect(report.passed.count == 6)
+        }
     }
 
     @Suite("CajuRHIMetal: conformidade e goldens", .enabled(if: metalAvailable))

@@ -10,4 +10,7 @@
 #include <android/looper.h>
 #include <android/log.h>
 
+// Declarações do VMA (implementação em Sources/CVMA/vma_impl.cpp); ver ADR 0024 e Sources/CVMA/README.md.
+#include "../CVMA/include/vk_mem_alloc.h"
+
 #endif

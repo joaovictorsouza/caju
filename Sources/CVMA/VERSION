@@ -1,0 +1,6 @@
+VulkanMemoryAllocator 3.5.0
+upstream: https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator (tag v3.5.0)
+arquivo: include/vk_mem_alloc.h (sem modificações)
+sha256: 41a5897caee36a46d636873a1f6a2518371d4d419cd299d40457e63bde64ecea
+licença: MIT (LICENSE)
+atualizar: baixar o mesmo arquivo da nova tag, trocar este arquivo e abrir PR dedicado (ADR 0005)

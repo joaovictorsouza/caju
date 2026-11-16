@@ -57,6 +57,7 @@ let package = Package(
         .library(name: "CajuRHI", targets: ["CajuRHI"]),
         .library(name: "CajuRHIMetal", targets: ["CajuRHIMetal"]),
         .library(name: "CajuRHIVulkan", targets: ["CajuRHIVulkan"]),
+        .library(name: "CajuRHIConformance", targets: ["CajuRHIConformance"]),
         .library(name: "CajuScene", targets: ["CajuScene"]),
         .library(name: "CajuInput", targets: ["CajuInput"]),
         .library(name: "CajuRender", targets: ["CajuRender"]),
@@ -105,8 +106,13 @@ let package = Package(
         // Vulkan só existe no Android: o CVulkan (system library) é condicional.
         module(
             "CajuRHIVulkan",
-            ["CajuRHI", .target(name: "CVulkan", condition: .when(platforms: [.android]))]
+            [
+                "CajuRHI", .target(name: "CVulkan", condition: .when(platforms: [.android])),
+                .target(name: "CVMA", condition: .when(platforms: [.android])),
+            ]
         ),
+        // Suíte de conformidade do RHI, genérica no dispositivo: roda no Metal (testes) e no Vulkan (aparelho).
+        module("CajuRHIConformance", ["CajuRHI", "CajuMath"]),
         // Camada 3
         module("CajuScene", ["CajuCore", "CajuMath"]),
         module("CajuInput", ["CajuCore", "CajuMath", "CajuPlatform"]),
@@ -131,6 +137,14 @@ let package = Package(
             exclude: ["README.md", "LICENSE", "VERSION"],
             publicHeadersPath: "include",
             cSettings: [.define("MA_NO_ENCODING")]
+        ),
+
+        // Vulkan Memory Allocator 3.5.0 vendorizado (ADR 0005, ADR 0024; versão e hash em Sources/CVMA/VERSION).
+        // Só o CajuRHIVulkan depende dele, e só no Android (no host o módulo compila vazio).
+        .target(
+            name: "CVMA",
+            exclude: ["README.md", "LICENSE", "VERSION"],
+            publicHeadersPath: "include"
         ),
 
         // Ferramentas
@@ -201,9 +215,9 @@ let package = Package(
             name: "CajuModulesTests",
             dependencies: [
                 "CajuMath", "CajuCore", "CajuCollections", "CajuAssetsCore", "CajuText", "CajuUILayout",
-                "CajuPhysicsSpatial", "CajuPlatform", "CajuRHI", "CajuRHIMetal", "CajuRHIVulkan", "CajuScene",
-                "CajuInput", "CajuRender", "CajuAssets", "CajuAnim", "CajuAudio", "CajuUI", "CajuPhysics",
-                "CajuNet", "CajuTesting", "CajuScripting", "CMiniaudio",
+                "CajuPhysicsSpatial", "CajuPlatform", "CajuRHI", "CajuRHIMetal", "CajuRHIVulkan",
+                "CajuRHIConformance", "CajuScene", "CajuInput", "CajuRender", "CajuAssets", "CajuAnim",
+                "CajuAudio", "CajuUI", "CajuPhysics", "CajuNet", "CajuTesting", "CajuScripting", "CMiniaudio",
             ],
             swiftSettings: common
         ),
