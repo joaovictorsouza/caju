@@ -108,6 +108,7 @@
             guard let swapchain, let window else { return }
             try swapchain.recreate(descriptor(window))
             try makePipelineIfNeeded()
+            logSurface("swapchain recriado")
         }
 
         mutating func drawFrame() {
@@ -158,23 +159,6 @@
         mutating func touch(_ event: CajuTouchEvent) {
             guard event.phase == .began else { return }
             cajuLog("toque em (\(event.x), \(event.y))")
-            // DIAGNÓSTICO TEMPORÁRIO: 100 recriações do swapchain e RSS antes/depois.
-            let before = Self.residentKB()
-            for _ in 0..<100 { try? recreate() }
-            cajuLog("100 recriações: RSS \(before) → \(Self.residentKB()) kB")
-        }
-
-        static func residentKB() -> Int {
-            guard let file = fopen("/proc/self/statm", "r") else { return -1 }
-            defer { fclose(file) }
-            var size = 0
-            var resident = 0
-            _ = withUnsafeMutablePointer(to: &size) { s in
-                withUnsafeMutablePointer(to: &resident) { r in
-                    withVaList([s, r]) { vfscanf(file, "%ld %ld", $0) }
-                }
-            }
-            return resident * 4
         }
     }
 

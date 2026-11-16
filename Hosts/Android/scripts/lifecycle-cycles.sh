@@ -16,6 +16,9 @@ restore() {
 }
 trap restore EXIT
 rss() { adb shell "grep VmRSS /proc/\$(pidof $pkg)/status" | awk '{print $2}'; }
+# GC explícito do ART (SIGUSR1, só em app debuggável) antes das medidas de base e final: o heap Java do
+# framework (NativeActivity, configurações) cresce a cada rotação até o GC rodar e não é memória da engine.
+gc() { adb shell run-as "$pkg" kill -10 "$(adb shell pidof "$pkg" | tr -d '\r')"; sleep 2; }
 
 adb shell settings put system accelerometer_rotation 0
 adb shell settings put system user_rotation 0
@@ -26,8 +29,10 @@ sleep 4
 # Um ciclo de aquecimento (caches de pipeline/render pass, primeira recriação) antes da linha de base.
 adb shell settings put system user_rotation 1; sleep 2; adb shell settings put system user_rotation 0; sleep 2
 adb shell input keyevent KEYCODE_HOME; sleep 2; adb shell am start -n "$activity" > /dev/null; sleep 3
+gc
 base="$(rss)"
 echo "RSS base (kB): $base" | tee "$log"
+adb shell dumpsys meminfo "$pkg" | sed -n '/App Summary/,/TOTAL SWAP/p' > "$log.meminfo-antes"
 i=1
 mode="${CAJU_CYCLE:-both}"
 while [ "$i" -le "$cycles" ]; do
@@ -44,7 +49,9 @@ while [ "$i" -le "$cycles" ]; do
   i=$((i + 1))
 done
 sleep 2
+gc
 final="$(rss)"
+adb shell dumpsys meminfo "$pkg" | sed -n '/App Summary/,/TOTAL SWAP/p' > "$log.meminfo-depois"
 echo "RSS final (kB): $final; ΔRSS = $((final - base)) kB" | tee -a "$log"
 echo "--- logcat (Caju, CajuVulkan) ---" >> "$log"
 adb logcat -d -s Caju CajuVulkan CajuVulkanDriver >> "$log"
