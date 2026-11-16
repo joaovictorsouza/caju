@@ -5,9 +5,7 @@ Uma página curta por decisão. Formato: **Status**, **Contexto**, **Decisão**,
 | ADR | Tema | Status |
 |---|---|---|
 
-**Números reservados:** 0016 (P-1, nunca escrito, não reutilizar); 0020 a 0029 para a Onda 1 (0021 já em uso pela A-1) (ver [briefs/onda-1.md](../briefs/onda-1.md)); usar só se houver decisão. O 0030 é da macro `@Component` (PR #20, fora das trilhas da Onda 1).
-
-**Números reservados:** 0016 (P-1, nunca escrito, não reutilizar); 0021, 0022, 0024 a 0026, 0028 e 0029 para a Onda 1 (0023 já usado: R-1; 0027 já usado: AN-1) (ver [briefs/onda-1.md](../briefs/onda-1.md)); usar só se houver decisão. O 0030 é da macro `@Component` (PR #20, fora das trilhas da Onda 1).
+**Números reservados:** 0016 (P-1, nunca escrito, não reutilizar); 0025, 0029 para a Onda 1 (0020 a 0024, 0026 a 0028 já em uso; ver [briefs/onda-1.md](../briefs/onda-1.md)); usar só se houver decisão. O 0030 é da macro `@Component` (PR #20, fora das trilhas da Onda 1).
 | [0001](0001-rhi-proprio.md) | GPU: RHI próprio (Metal + Vulkan) e Slang | Aceito |
 | [0002](0002-ui-declarativa.md) | UI declarativa e reatividade | Aceito |
 | [0003](0003-ecs-e-agendador.md) | ECS híbrido e agendador single-thread primeiro | Aceito |
@@ -23,11 +21,12 @@ Uma página curta por decisão. Formato: **Status**, **Contexto**, **Decisão**,
 | [0013](0013-layout-de-ui-por-faixas.md) | Layout de UI por faixas de tamanho (P-4) | Aceito |
 | [0014](0014-ecs-query-e-component.md) | ECS da TB-1: Query por aridade 1..8 e Component por protocolo | Aceito |
 | [0015](0015-contrato-rhi-e-platform.md) | Contrato do RHI e da Platform (TB-2, Fase 1) | Aceito |
-| [0017](0017-parsers-de-assets-puros.md) | Parsers de assets em Swift puro; Basis/JPEG pixels fora | Aceito |
+| [0017](0017-parsers-de-assets-puros.md) | Parsers de assets em Swift puro; Basis fora (Zstd/JPEG pixels no 0022) | Aceito (parcialmente substituído pelo 0022) |
 | [0018](0018-bvh-e-primitivas-espaciais.md) | P-3: BVH dinâmica, primitivas espaciais e consultas sem alocação | Aceito |
 | [0019](0019-host-android-build-e-link.md) | Host Android: NativeActivity em Swift, `CVulkan` e link com o NDK | Aceito (link manual substituído pelo 0024) |
 | [0020](0020-gate-da-onda-0-5.md) | Resultado do gate de saída da Onda 0.5 (S-0): medidas e teto do `.apk` | Aceito (parcial) |
 | [0021](0021-assets-handles-e-ciclo-de-vida.md) | Assets: handles geracionais, estados de carga e ciclo de vida (A-1) | Aceito |
+| [0022](0022-jpeg-e-zstd-em-swift-puro.md) | A-2: pixels JPEG e descompressor Zstd em Swift puro (`CajuAssetsCore`) | Aceito |
 | [0023](0023-mundo-de-render-e-extracao.md) | R-1: mundo de render separado, extração e draw list | Proposto |
 | [0024](0024-vulkan-vma-e-sincronizacao.md) | Backend Vulkan do `CajuRHI`: VMA, ligação de recursos, layouts e swapchain | Aceito |
 | [0026](0026-ui-display-list-e-dsl.md) | Display list da UI e contrato da DSL (U-1) | Proposto |

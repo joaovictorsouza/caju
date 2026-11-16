@@ -1,6 +1,6 @@
 # ADR 0017: Parsers de assets em Swift puro (P-2); Basis fica para dependência C dedicada
 
-**Status:** Aceito.
+**Status:** Aceito (parcialmente substituído pelo [ADR 0022](0022-jpeg-e-zstd-em-swift-puro.md) na parte de descompressão Zstd e decodificação de pixels JPEG; transcodificação Basis continua para dependência C).
 
 ## Contexto
 A trilha P-2 entrega `CajuAssetsCore` (camada 1, puro, sem GPU/ECS). O ADR 0005 permite dependências C encapsuladas, mas cada uma exige PR dedicado ao `Package.swift`. Os parsers lidam com dado externo hostil e precisam rodar em iOS, Android, macOS e Linux, com *fuzz* no CI.

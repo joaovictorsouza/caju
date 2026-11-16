@@ -8,7 +8,8 @@
 /// mantendo os dados de imagem no buffer de entrada sem copiá-los.
 ///
 /// - Note: Transcodificação Basis Universal (`ETC1S` / `UASTC`) **não** é implementada aqui;
-///   ela pertence a um PR dedicado com dependência C. ``parse(_:limits:)`` apenas valida o contêiner.
+///   ela pertence a um PR dedicado com dependência C. A descompressão de níveis Zstd/ZLIB
+///   está disponível via ``decompressLevel(_:from:limits:)``. ``parse(_:limits:)`` apenas valida o contêiner.
 /// - Note: Alinhamento de níveis adotado conforme a especificação KTX 2.0 (§3.12):
 ///   com `supercompressionScheme == .none`, exige `byteOffset` alinhado a 4 bytes
 ///   (mínimo garantido por `lcm(texelBlockSize, 4)` sem embutir tabela completa de `VkFormat`);
@@ -84,6 +85,67 @@ public struct KTX2Container: Sendable {
         }
         let end = try checkedAdd(start, length, "ktx2.levels[\(i)]")
         return start..<end
+    }
+
+    /// Descomprime os bytes do nível de mipmap `i` a partir do arquivo `bytes` original.
+    ///
+    /// Suporta níveis sem supercompressão (`.none`), Zstandard (`.zstd`) e ZLIB (`.zlib`),
+    /// verificando `uncompressedByteLength` contra `limits.maxOutputBytes` antes de alocar.
+    /// Supercompressão `.basisLZ` lança `.unsupported` (depende de transcodificação Basis).
+    public func decompressLevel(
+        _ i: Int,
+        from bytes: [UInt8],
+        limits: AssetLimits = .default
+    ) throws(AssetError) -> [UInt8] {
+        let context = "ktx2.levels[\(i)]"
+        let range = try levelRange(i)
+        guard range.upperBound <= bytes.count else {
+            throw .truncated(context: context)
+        }
+        let level = levels[i]
+        guard let expectedSize = Int(exactly: level.uncompressedByteLength) else {
+            throw .invalid(context: context, reason: "uncompressedByteLength excede Int")
+        }
+        try checkLimit(expectedSize, limits.maxOutputBytes, "\(context).output")
+
+        switch supercompressionScheme {
+        case .none:
+            guard range.count == expectedSize else {
+                throw .invalid(
+                    context: context,
+                    reason: "byteLength difere de uncompressedByteLength sem supercompressão"
+                )
+            }
+            return Array(bytes[range])
+        case .zstd:
+            return try ZstdDecoder.decompressRange(
+                bytes,
+                range: range,
+                expectedSize: expectedSize,
+                limits: limits,
+                context: "\(context).zstd"
+            )
+        case .zlib:
+            try checkLimit(range.count, limits.maxInputBytes, "\(context).input")
+            let decompressed = try Inflate.zlibDecompress(
+                Array(bytes[range]),
+                from: 0,
+                maxOutput: expectedSize,
+                context: "\(context).zlib"
+            )
+            guard decompressed.count == expectedSize else {
+                throw .invalid(
+                    context: "\(context).zlib",
+                    reason: "tamanho descomprimido difere de uncompressedByteLength"
+                )
+            }
+            return decompressed
+        case .basisLZ:
+            throw .unsupported(
+                context: context,
+                reason: "supercompressão BasisLZ requer transcodificação"
+            )
+        }
     }
 
     /// Faz o parse e a validação estrita de um contêiner KTX 2.0 a partir de `bytes`.
