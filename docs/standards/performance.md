@@ -40,6 +40,10 @@ Fonte: `Tests/CajuModulesTests/CajuFrameGraphBenchmarkTests.swift` e `CajuMetalT
 - Benchmark simples em `Tests/CajuModulesTests/CajuAnimBenchmarkTests.swift` (32 e 128 juntas, amostragem simples e *crossfade*, 1 000 iterações; roda como teste porque `caju-bench` depende de `Package.swift` trancado). Metas e medidas nos aparelhos de referência (iPhone 16 Pro, Galaxy S22+): `(?)`.
 
 
+## PH-1: consultas de física no ECS (`CajuPhysics`)
+- Zero alocação por consulta (`raycast`, `raycastAll`, `overlapSphere`, `spherecast`, `pick`): pilha de travessia reutilizada e *visitors* não escapantes; verificado por contagem de blocos de `malloc` em `CajuPhysicsSceneTests` (macOS). `sync` pode alocar ao crescer tabelas.
+- `raycast` percorre todos os candidatos por AABB (a BVH não encurta o raio ao achar um impacto mais próximo); custo medido e meta em aparelho: `(?)`.
+
 ## S-0: linhas de base em aparelho (medidas 2026-11-15)
 Detalhes e comandos em `docs/evidencias/s0-android/` (Galaxy S22+, SM-S906E, Android 16) e `docs/evidencias/s0-ios/` (iPhone 16 Pro). Mediana de 5 execuções; razão S22+/Mac M1 em parênteses.
 

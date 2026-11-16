@@ -122,7 +122,7 @@ let package = Package(
         module("CajuAnim", ["CajuCore", "CajuMath", "CajuScene"]),
         module("CajuAudio", ["CajuCore", "CajuMath", "CMiniaudio"]),
         module("CajuUI", ["CajuCore", "CajuUILayout", "CajuText", "CajuRHI", "CajuInput"]),
-        module("CajuPhysics", ["CajuCore", "CajuPhysicsSpatial", "CajuScene"]),
+        module("CajuPhysics", ["CajuCore", "CajuMath", "CajuPhysicsSpatial", "CajuScene", "CajuInput"]),
         // Camada 4
         module("CajuNet", ["CajuCore"]),
         module("CajuTesting", ["CajuCore"]),
@@ -208,6 +208,14 @@ let package = Package(
         .testTarget(
             name: "CajuPhysicsSpatialTests",
             dependencies: ["CajuPhysicsSpatial", "CajuMath", "CajuTesting"],
+            swiftSettings: common
+        ),
+        .testTarget(
+            name: "CajuPhysicsTests",
+            dependencies: [
+                "CajuPhysics", "CajuPhysicsSpatial", "CajuScene", "CajuCore", "CajuInput", "CajuMath",
+                "CajuPlatform", "CajuTesting",
+            ],
             swiftSettings: common
         ),
         .testTarget(
