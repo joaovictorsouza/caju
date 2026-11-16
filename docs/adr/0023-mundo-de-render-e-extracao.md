@@ -19,7 +19,7 @@ A Onda 1 ([brief](../briefs/onda-1.md)) pede render completo no `CajuRender`: un
   - **Comparação honesta:** só o Bevy faz exatamente isto (`RenderAssets` no mundo de render, alimentado por eventos de asset). No Godot o recurso chama o `RenderingServer` por conta própria; no Filament a ponte é um módulo à parte (`gltfio`). Nosso argumento não é "todos fazem": é manter o A-1 só em CPU, sem GPU, testável em Linux, com upload sob o orçamento do frame graph.
 - **Fronteira com AN-1 (revisada):** o AN-1 entrega **pose em espaço do modelo sem `inverseBind`**; o R-1b multiplica pelo `inverseBind` da malha ao copiar para o buffer do quadro (só para o que passou no *cull*; uma pose serve a várias malhas). `CajuSkinPose` (só referência: slot na arena, `jointCount`, `version`; ID 9 `(?)`) e a arena `CajuPoseArena` (matrizes, capacidade reservada) ficam em **`CajuScene`**, que AN-1 e R-1 já consomem, sem AN-1 → CajuRender. Rejeitado: juntas como entidades (Bevy), por custo de entidades e propagação; paleta dentro do componente (8 KB por coluna). `jointCount ≤ 128 (?)`. Formato fino no ADR 0027.
 - **Divisão:** R-1a (extração, unlit/PBR, luz, câmera, cull, PSO em memória) e R-1b (sombra, instancing, skinning, PSO persistido). R-1a não espera AN-1.
-- **Este PR não muda `Package.swift`;** a mudança de dependências acima vai em PR dedicado (nenhuma dependência externa nova).
+- **Este PR não muda `Package.swift`;** a mudança de dependências acima vai no PR único final da Onda 1 (nenhuma dependência externa nova).
 
 ## Alternativas
 - **Desenhar direto do ECS** (sem mundo de render): menos código inicial, mas acopla o desenho a arquétipos, impede sobrepor jogo e render e dificulta testes headless.
