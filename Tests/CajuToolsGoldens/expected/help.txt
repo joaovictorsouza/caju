@@ -1,0 +1,9 @@
+uso: caju-tools <subcomando> [opções]
+
+subcomandos:
+  texture         converte imagem (PNG/PPM) para KTX2 RGBA8 ou valida .ktx2
+  validate-gltf   valida arquivo glTF 2.0 (.gltf) ou GLB (.glb)
+  manifest        gera manifesto JSON determinístico de um diretório de assets
+
+opções globais:
+  -h, --help      exibe esta ajuda

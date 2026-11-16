@@ -1,5 +1,5 @@
-// CLI de ferramentas do Caju (alvo criado na S-0; os subcomandos chegam na trilha T-1).
-// Uso: swift run caju-tools <subcomando>
+import Foundation
+
 #if canImport(Glibc)
     import Glibc
 #elseif canImport(Android)
@@ -10,25 +10,11 @@
     import Musl
 #endif
 
-/// Subcomandos previstos para a T-1 (plano §8). Ainda sem implementação.
-let plannedCommands = ["texture", "validate-gltf", "manifest"]
-
-func printUsage() {
-    print("uso: caju-tools <subcomando>")
-    let names = plannedCommands.joined(separator: ", ")
-    print("subcomandos previstos (trilha T-1, ainda não implementados): \(names)")
+let result = CajuToolsCLI.run(arguments: Array(CommandLine.arguments.dropFirst()))
+if !result.stdout.isEmpty {
+    FileHandle.standardOutput.write(Data(result.stdout.utf8))
 }
-
-let arguments = CommandLine.arguments.dropFirst()
-if arguments.isEmpty || arguments.first == "--help" || arguments.first == "-h" {
-    printUsage()
-    exit(0)
+if !result.stderr.isEmpty {
+    FileHandle.standardError.write(Data(result.stderr.utf8))
 }
-let command = arguments.first ?? ""
-if plannedCommands.contains(command) {
-    print("caju-tools: '\(command)' ainda não implementado (trilha T-1)")
-} else {
-    print("caju-tools: subcomando desconhecido '\(command)'")
-    printUsage()
-}
-exit(2)
+exit(result.exitCode.rawValue)
