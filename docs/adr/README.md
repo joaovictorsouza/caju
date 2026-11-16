@@ -24,6 +24,7 @@ Uma página curta por decisão. Formato: **Status**, **Contexto**, **Decisão**,
 | [0019](0019-host-android-build-e-link.md) | Host Android: NativeActivity em Swift, `CVulkan` e link com o NDK | Aceito |
 | [0020](0020-gate-da-onda-0-5.md) | Resultado do gate de saída da Onda 0.5 (S-0): medidas e teto do `.apk` | Aceito (parcial) |
 | [0023](0023-mundo-de-render-e-extracao.md) | R-1: mundo de render separado, extração e draw list | Proposto |
+| [0027](0027-formato-de-pose-e-fronteira-r1b.md) | AN-1: formato de pose em espaço do modelo, arena e fronteira com R-1b | Proposto |
 | [0030](0030-macro-component.md) | Macro `@Component(id:)` com `swift-syntax` | Aceito |
 
-**Números reservados:** 0016 (P-1, nunca escrito, não reutilizar); 0021, 0022 e 0024 a 0029 para a Onda 1 (0023 já usado: R-1) (ver [briefs/onda-1.md](../briefs/onda-1.md)); usar só se houver decisão. O 0030 é da macro `@Component` (PR #20, fora das trilhas da Onda 1).
+**Números reservados:** 0016 (P-1, nunca escrito, não reutilizar); 0021, 0022, 0024 a 0026, 0028 e 0029 para a Onda 1 (0023 já usado: R-1; 0027 já usado: AN-1) (ver [briefs/onda-1.md](../briefs/onda-1.md)); usar só se houver decisão. O 0030 é da macro `@Component` (PR #20, fora das trilhas da Onda 1).

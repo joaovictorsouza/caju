@@ -34,6 +34,10 @@ Fonte: `Tests/CajuModulesTests/CajuFrameGraphBenchmarkTests.swift` e `CajuMetalT
 - ≤ 300 draw calls por quadro de cena (instancing em R-1b); zero alocação por quadro estável no `CajuRenderWorld`.
 - Benchmarks da extração e do *sort* entram com R-1a ([ADR 0023](../adr/0023-mundo-de-render-e-extracao.md)).
 
+## AN-1: amostragem SIMD de animação (`CajuAnim`)
+- Zero alocação por quadro estável (`CajuAnimScratchBuffer` e `CajuPoseArena` com capacidade reservada) para esqueletos até 128 juntas `(?)`.
+- Benchmark simples em `Tests/CajuModulesTests/CajuAnimBenchmarkTests.swift` (32 e 128 juntas, amostragem simples e *crossfade*, 1 000 iterações; roda como teste porque `caju-bench` depende de `Package.swift` trancado). Metas e medidas nos aparelhos de referência (iPhone 16 Pro, Galaxy S22+): `(?)`.
+
 
 ## S-0: linhas de base em aparelho (medidas 2026-11-15)
 Detalhes e comandos em `docs/evidencias/s0-android/` (Galaxy S22+, SM-S906E, Android 16) e `docs/evidencias/s0-ios/` (iPhone 16 Pro). Mediana de 5 execuções; razão S22+/Mac M1 em parênteses.
