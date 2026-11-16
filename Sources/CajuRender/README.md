@@ -4,7 +4,7 @@ Renderização: mundo de render separado, extração a partir do ECS, *frame gra
 
 - **Camada:** 3 (dependências só para baixo; ver §5 do plano).
 - **Trilha dona:** R-1 (Onda 1), dividida em R-1a e R-1b.
-- **Estado:** **R-1a implementada** ([ADR 0023](../../docs/adr/0023-mundo-de-render-e-extracao.md)): assets de render em CPU (`CajuMeshAsset`, `CajuMaterialAsset`, `CajuTextureAsset`, cubo e esfera procedurais), componentes `CajuRenderMesh` (ID 8), `CajuCamera` (ID 10), `CajuDirectionalLightSource` (ID 11), `CajuRenderWorld` com extração cheia, `CajuDrawList` (cull + radix), `CajuSceneRenderer` (residência, PSO em memória, passe `main` MSAA, `unlit` e PBR com uma luz) e o golden de cena `CajuSceneGolden`. R-1b (sombra, instancing, skinning) ainda não.
+- **Estado:** **R-1a implementada** ([ADR 0023](../../docs/adr/0023-mundo-de-render-e-extracao.md)): assets de render em CPU (`CajuMeshAsset`, `CajuMaterialAsset`, `CajuTextureAsset`, cubo e esfera procedurais), componentes `CajuRenderMesh` (ID 8), `CajuCamera` (ID 10), `CajuDirectionalLightSource` (ID 11), `CajuRenderWorld` com extração cheia, `CajuDrawList` (cull + radix), `CajuSceneRenderer` (residência, PSO em memória, passe `main` MSAA, `unlit` e PBR com uma luz) e o golden de cena `CajuSceneGolden`. **R-1b implementada:** instancing automático, sombra da luz direcional (passe `shadow`, PCF 2x2) e skinning na GPU (`CajuMeshSkin`, paleta do quadro a partir da `CajuPoseArena`). Pendente: cache de PSO persistido.
 
 ## Uso por quadro
 ```swift
@@ -14,7 +14,9 @@ let renderer = try CajuSceneRenderer(device: device, colorFormat: swapchain.form
 try render.extract(from: world, assets: assetServer)
 try renderer.prepare(world: render, assets: assetServer)        // eventos de asset + uploads sob orçamento
 var commands = try device.queue.makeCommandBuffer(label: "quadro")
-try renderer.record(world: render, into: &commands, target: image.texture, width: image.width, height: image.height)
+try renderer.record(
+    world: render, into: &commands, target: image.texture, width: image.width, height: image.height,
+    poses: poseArena)                                               // paleta de skinning (opcional)
 ```
 
 ## Contrato em uma página
@@ -32,7 +34,7 @@ try renderer.record(world: render, into: &commands, target: image.texture, width
 Uma luz direcional, sem IBL, sem luzes pontuais, sem *blend shapes*; metas de desempenho `(?)` (ver `docs/standards/performance.md`).
 
 ## Shaders
-`Shaders/CajuRender/scene.{vert,frag}` (GLSL) → `scripts/compile-scene-shaders.sh` → `CajuSceneShaderSPIRV.swift` (gerado). O MSL equivalente fica em `CajuSceneShaderMSL.swift` (mudanças valem para os dois até o Slang). Ligações: vértice `setBytes(index: 0)` = objeto, fragmento `setBytes(index: 0)` = material e luz, textura/sampler 0 = cor base.
+`Shaders/CajuRender/scene.{vert,frag}` (GLSL) → `scripts/compile-scene-shaders.sh` → `CajuSceneShaderSPIRV.swift` (gerado). O MSL equivalente fica em `CajuSceneShaderMSL.swift` (mudanças valem para os dois até o Slang). Ligações: vértice `setBytes(index: 0)` = `viewProjection`, `setBuffer(index: 1)` = instâncias, `setBuffer(index: 2)` = paleta de juntas (variante `scene_skinned.vert`, segundo fluxo `setVertexBuffer(index: 1)`); fragmento `setBytes(index: 0)` = material, luz e sombra, textura/sampler 0 = cor base, 1 = mapa de sombra.
 
 ## Dependências
 - `CajuCore`, `CajuMath`, `CajuRHI`, `CajuScene`, `CajuAssets`

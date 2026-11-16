@@ -34,6 +34,7 @@ Fonte: `Tests/CajuModulesTests/CajuFrameGraphBenchmarkTests.swift` e `CajuMetalT
 - **Meta:** extração de 1 000 entidades < 0,5 ms de CPU no aparelho alto `(?)`; ≤ 300 draw calls por quadro de cena (instancing em R-1b).
 - **Medido (Mac M-series, `caju-bench` release, 2026-11-16):** `render.extract` 81 ns/entidade (1 000 e 10 000, ou seja 0,08 ms para 1 000); `render.drawList(cull+sort)` 12 ns/item (1 000) e 33 ns/item (10 000). Aparelho `(?)`.
 - **Zero alocação no quadro estável** da extração e da draw list: teste `CajuRenderAllocationTests` (blocos do `malloc` não crescem em 200 quadros, Darwin).
+- **Instancing (R-1b):** 100 malhas iguais = 1 draw call (`CajuSceneRenderer.lastDrawCalls`; o passe de sombra não entra na conta). Draw calls em cena real no aparelho `(?)`.
 
 ## AN-1: amostragem SIMD de animação (`CajuAnim`)
 - Zero alocação por quadro estável (`CajuAnimScratchBuffer` e `CajuPoseArena` com capacidade reservada) para esqueletos até 128 juntas `(?)`.

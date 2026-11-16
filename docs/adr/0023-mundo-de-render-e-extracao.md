@@ -30,6 +30,14 @@ A Onda 1 ([brief](../briefs/onda-1.md)) pede render completo no `CajuRender`: un
 - **Shaders:** GLSL em `Shaders/CajuRender` → SPIR-V gerado (`scripts/compile-scene-shaders.sh`) e MSL equivalente à mão, até o pipeline Slang (ADR 0001).
 - **Medidas:** extração 81 ns/entidade e draw list (cull + radix) 12 ns/item com 1 000 entidades no Mac M-series (`caju-bench`, release); sem crescimento do heap em 200 quadros estáveis (teste com `malloc_zone_statistics`). Golden de cena (`CajuSceneGolden`) gravado do Metal; o Vulkan roda o mesmo pelo executável de conformidade.
 
+## Implementação da R-1b (2026-11-16)
+- **Instancing automático:** itens consecutivos da draw list com a mesma malha e material viram um `drawIndexed(instanceCount:)`; as matrizes vão num buffer `storage` por quadro em voo (3). 100 cubos iguais = 1 draw call (`lastDrawCalls`).
+- **Sombra:** passe `shadow` só de profundidade antes do `main`, mapa único (1024², `depth32Float`), projeção ortográfica que cobre a caixa do quadro, inclui o que projeta sombra mesmo fora da tela; PCF 2x2 comparado no shader (o contrato do RHI não tem *sampler* de comparação). `CajuRenderMesh.castsShadow` por malha e `CajuDirectionalLight.castsShadow` na luz.
+- **Skinning:** `CajuMeshSkin` (4 juntas e 4 pesos por vértice, `inverseBind` por junta) no asset de malha; a extração copia `CajuSkinPose`; o renderer monta a paleta do quadro (`pose × inverseBind`) a partir da `CajuPoseArena` só para o que é desenhado, num buffer `storage` por quadro em voo. Sem pose válida, a malha fica na pose de *bind*. Malhas com pele não entram em lote de instâncias.
+- **Topologia fixa** `shadow → main` gravada pelo `CajuSceneRenderer` (não pelo `CajuFrameGraphBuilder`); o passe de UI da U-1b entra depois do `main` no mesmo *command buffer*. Migrar para o *frame graph* do RHI fica para quando houver mais de um consumidor de transientes.
+- **Pendente:** cache de PSO persistido (`VkPipelineCache`/arquivo de binários Metal); as pipelines do cenário são criadas na primeira carga.
+- **Verificação:** golden de cena com o chão recebendo as sombras (referência do Metal); `checkSkinningEquivalence` (pele rígida posada = mesma malha transformada) no Metal e no executável do Android; instancing e sombra no dispositivo null.
+
 ## Alternativas
 - **Desenhar direto do ECS** (sem mundo de render): menos código inicial, mas acopla o desenho a arquétipos, impede sobrepor jogo e render e dificulta testes headless.
 - **Cola de aplicação entre A-1 e R-1** (rascunho inicial): peça de integração sem dono que todo jogo reescreveria; rejeitada após comparar com Bevy, Godot, Filament e Unity.
