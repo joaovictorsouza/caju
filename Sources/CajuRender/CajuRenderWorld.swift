@@ -43,6 +43,8 @@ public final class CajuRenderWorld {
     public private(set) var meshes: [CajuAssetHandle<CajuMeshAsset>]
     public private(set) var materials: [CajuAssetHandle<CajuMaterialAsset>]
     public private(set) var layerMasks: [UInt32]
+    /// A malha projeta sombra da luz direcional (R-1b).
+    public private(set) var castsShadow: [Bool]
 
     /// Câmera do quadro (matriz de mundo da câmera e parâmetros); `nil` se a cena não tem câmera.
     public var camera: (transform: CajuMat4, camera: CajuCamera)?
@@ -59,11 +61,13 @@ public final class CajuRenderWorld {
         meshes = []
         materials = []
         layerMasks = []
+        castsShadow = []
         worldMatrices.reserveCapacity(capacity)
         worldBounds.reserveCapacity(capacity)
         meshes.reserveCapacity(capacity)
         materials.reserveCapacity(capacity)
         layerMasks.reserveCapacity(capacity)
+        castsShadow.reserveCapacity(capacity)
     }
 
     /// Esvazia o quadro mantendo a memória.
@@ -74,6 +78,7 @@ public final class CajuRenderWorld {
         meshes.removeAll(keepingCapacity: true)
         materials.removeAll(keepingCapacity: true)
         layerMasks.removeAll(keepingCapacity: true)
+        castsShadow.removeAll(keepingCapacity: true)
         camera = nil
         light = nil
     }
@@ -81,7 +86,7 @@ public final class CajuRenderWorld {
     /// Acrescenta uma malha ao quadro (a extração usa isto; testes também).
     public func append(
         world: CajuMat4, localBounds: CajuAABB, mesh: CajuAssetHandle<CajuMeshAsset>,
-        material: CajuAssetHandle<CajuMaterialAsset>, layerMask: UInt32 = 1
+        material: CajuAssetHandle<CajuMaterialAsset>, layerMask: UInt32 = 1, castsShadow: Bool = true
     ) throws(CajuRenderError) {
         guard count < capacity else { throw .capacityExceeded(.meshes) }
         worldMatrices.append(world)
@@ -89,6 +94,7 @@ public final class CajuRenderWorld {
         meshes.append(mesh)
         materials.append(material)
         layerMasks.append(layerMask)
+        self.castsShadow.append(castsShadow)
         count += 1
     }
 
@@ -106,7 +112,7 @@ public final class CajuRenderWorld {
             do throws(CajuRenderError) {
                 try append(
                     world: transform.matrix, localBounds: bounds, mesh: mesh.mesh, material: mesh.material,
-                    layerMask: mesh.layerMask)
+                    layerMask: mesh.layerMask, castsShadow: mesh.castsShadow)
             } catch { overflow = true }
         }
         if overflow { throw .capacityExceeded(.meshes) }

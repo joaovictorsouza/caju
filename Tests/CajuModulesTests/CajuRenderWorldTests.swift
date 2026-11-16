@@ -204,6 +204,11 @@ struct CajuSceneRendererNullTests {
         try renderer.record(world: render, into: &commands, target: target, width: 32, height: 32)
         #expect(renderer.drawList.items.count == 101)
         #expect(renderer.lastDrawCalls == 2)
+        #expect(!renderer.lastFrameHadShadow)  // sem luz no quadro
+
+        render.light = CajuDirectionalLight(direction: CajuVec3(0, -1, 0), castsShadow: true)
+        try renderer.record(world: render, into: &commands, target: target, width: 32, height: 32)
+        #expect(renderer.lastFrameHadShadow)
     }
 }
 

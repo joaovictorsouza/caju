@@ -2,8 +2,9 @@ import CajuAssets
 import CajuMath
 import CajuRHI
 
-/// Golden de cena da R-1a, igual em todo backend (Metal nos testes, Vulkan no aparelho): cubo `unlit`
-/// vermelho girado à esquerda e esfera PBR azulada à direita, luz direcional e ambiente, 64x64, MSAA 4x.
+/// Golden de cena da R-1, igual em todo backend (Metal nos testes, Vulkan no aparelho): cubo `unlit`
+/// vermelho girado à esquerda, esfera PBR azulada à direita e chão cinza com a sombra delas (R-1b), luz
+/// direcional e ambiente, 64x64, MSAA 4x.
 ///
 /// A referência (`CajuSceneGoldenData.samples`) foi gravada do Metal; os outros backends têm de bater nela
 /// dentro da tolerância. Pontos exatos (fundo e centro do cubo `unlit`) não têm tolerância.
@@ -29,13 +30,16 @@ public enum CajuSceneGolden {
             CajuMaterialAsset(
                 model: .pbr, baseColor: CajuColor(r: 0.2, g: 0.5, b: 1), metallic: 0, roughness: 0.4))
 
+        let ground = assets.put(CajuMeshAsset.plane(size: 6))
+        let grey = assets.put(CajuMaterialAsset(baseColor: CajuColor(r: 0.6, g: 0.6, b: 0.6), roughness: 0.9))
         let world = CajuRenderWorld(capacity: 4)
         world.camera = (
             .translation(CajuVec3(0, 0, 3)),
             CajuCamera(fovY: .pi / 3, near: 0.1, far: 20, clearColor: clear)
         )
         world.light = CajuDirectionalLight(
-            direction: CajuVec3(-1, -1, -1).normalized() ?? CajuVec3(0, -1, 0), intensity: 3)
+            direction: CajuVec3(0.5, -1, 0.6).normalized() ?? CajuVec3(0, -1, 0), intensity: 3,
+            castsShadow: true)
         world.ambient = CajuColor(r: 0.05, g: 0.05, b: 0.05)
         let spin =
             (CajuQuat(axis: CajuVec3(0, 1, 0), radians: 0.6) ?? .identity)
@@ -47,6 +51,11 @@ public enum CajuSceneGolden {
         try world.append(
             world: .translation(CajuVec3(0.75, 0, 0)), localBounds: CajuMeshAsset.sphere(radius: 0.55).bounds,
             mesh: sphere, material: blue)
+        // Chão que recebe a sombra (R-1b) e não projeta.
+        try world.append(
+            world: .translation(CajuVec3(0, -0.7, 0)), localBounds: CajuMeshAsset.plane(size: 6).bounds,
+            mesh: ground,
+            material: grey, castsShadow: false)
 
         let renderer = try CajuSceneRenderer(device: device, colorFormat: .bgra8Unorm, sampleCount: 4)
         try renderer.prepare(world: world, assets: assets)

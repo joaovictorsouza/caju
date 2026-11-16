@@ -22,6 +22,17 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
     private let whiteTexture: CajuTextureHandle
     private let sampler: CajuSamplerHandle
 
+    /// Sombra da luz direcional (R-1b): mapa de profundidade único, passe `shadow` antes do `main`.
+    public let shadowMapSize: Int
+    private let shadowMap: CajuTextureHandle
+    private let shadowSampler: CajuSamplerHandle
+    private var shadowPipeline = CajuRenderPipelineHandle.null
+    private var shadowBatches: [(first: Int, count: Int, mesh: Int)] = []
+    private var shadowInstances: [InstanceData] = []
+    private var shadowMapInitialized = false
+    /// `true` se o último `record` desenhou o passe de sombra.
+    public private(set) var lastFrameHadShadow = false
+
     private struct PipelineKey: Hashable {
         var model: CajuMaterialModel
         var alphaMode: CajuAlphaMode
@@ -65,8 +76,9 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
 
     public init(
         device: Device, colorFormat: CajuPixelFormat, sampleCount: Int = 4, drawCapacity: Int = 4096,
-        residentCapacity: Int = 1024
+        residentCapacity: Int = 1024, shadowMapSize: Int = 1024
     ) throws(CajuRenderError) {
+        self.shadowMapSize = max(shadowMapSize, 16)
         self.device = device
         self.colorFormat = colorFormat
         self.sampleCount = device.capabilities.sampleCounts.supports(sampleCount) ? sampleCount : 1
@@ -76,6 +88,8 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
         textures = Array(repeating: nil, count: residentCapacity)
         instanceData.reserveCapacity(drawList.capacity)
         batches.reserveCapacity(drawList.capacity)
+        shadowBatches.reserveCapacity(drawList.capacity)
+        shadowInstances.reserveCapacity(drawList.capacity)
         do {
             let shaders: (vertex: CajuShaderModuleDescriptor, fragment: CajuShaderModuleDescriptor)
             if device.capabilities.backendName == "Vulkan" {
@@ -108,12 +122,28 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
                 instanceBuffers.append(
                     try device.createBuffer(
                         CajuBufferDescriptor(
-                            size: drawCapacity * MemoryLayout<InstanceData>.stride, usage: .storage,
+                            // Metade para o passe main, metade para os que projetam sombra.
+                            size: 2 * drawCapacity * MemoryLayout<InstanceData>.stride, usage: .storage,
                             storage: .shared,
                             label: "scene.instances")))
             }
             sampler = try device.createSampler(
                 CajuSamplerDescriptor(addressU: .repeat, addressV: .repeat, addressW: .repeat))
+            shadowMap = try device.createTexture(
+                CajuTextureDescriptor(
+                    format: .depth32Float, width: self.shadowMapSize, height: self.shadowMapSize,
+                    usage: [.renderTarget, .sampled], label: "scene.shadowMap"))
+            shadowSampler = try device.createSampler(
+                CajuSamplerDescriptor(minFilter: .nearest, magFilter: .nearest, mipFilter: .nearest))
+            shadowPipeline = try device.createRenderPipeline(
+                CajuRenderPipelineDescriptor(
+                    vertex: vertex, fragment: nil,
+                    vertexAttributes: Self.vertexAttributes,
+                    vertexLayouts: [
+                        CajuVertexBufferLayout(bufferIndex: 0, stride: CajuMeshVertexLayout.stride)
+                    ],
+                    colorTargets: [], depth: CajuDepthState(format: .depth32Float, compare: .lessEqual),
+                    cullMode: .none, sampleCount: 1, label: "scene.shadow"))
         } catch {
             throw .rhi(error)
         }
@@ -129,20 +159,52 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
         for pipeline in pipelines { device.destroy(pipeline) }
         device.destroy(whiteTexture)
         device.destroy(sampler)
+        device.destroy(shadowPipeline)
+        device.destroy(shadowMap)
+        device.destroy(shadowSampler)
         device.destroy(vertex.module)
         if fragment.module != vertex.module { device.destroy(fragment.module) }
+    }
+
+    /// Projeção ortográfica da luz que cobre a caixa de todos os itens do quadro (cascata única).
+    static func lightViewProjection(world: CajuRenderWorld, direction: CajuVec3) -> CajuMat4? {
+        guard world.count > 0 else { return nil }
+        var bounds = world.worldBounds[0]
+        for i in 1..<world.count {
+            bounds = CajuAABB(
+                min: CajuVec3.min(bounds.min, world.worldBounds[i].min),
+                max: CajuVec3.max(bounds.max, world.worldBounds[i].max))
+        }
+        let center = (bounds.min + bounds.max) * 0.5
+        let radius = max((bounds.max - bounds.min).length * 0.5, 0.01)
+        guard let forward = direction.normalized() else { return nil }
+        let up = abs(forward.y) > 0.99 ? CajuVec3(1, 0, 0) : CajuVec3(0, 1, 0)
+        guard let view = CajuMat4.lookAt(eye: center - forward * (2 * radius), target: center, up: up),
+            let projection = CajuMat4.orthographic(
+                left: -radius, right: radius, bottom: -radius, top: radius, near: radius * 0.5,
+                far: radius * 3.5)
+        else { return nil }
+        return projection * view
+    }
+
+    private static var vertexAttributes: [CajuVertexAttribute] {
+        [
+            CajuVertexAttribute(location: 0, format: .float3, offset: 0, bufferIndex: 0),
+            CajuVertexAttribute(location: 1, format: .float3, offset: 12, bufferIndex: 0),
+            CajuVertexAttribute(location: 2, format: .float2, offset: 24, bufferIndex: 0),
+        ]
     }
 
     private static func bytes(_ words: [UInt32]) -> [UInt8] { words.withUnsafeBytes { [UInt8]($0) } }
 
     // Os *closures* de `withUnsafeBytes` não lançam erro tipado: converter um `throws(CajuRHIError)` para o
     // `throws` sem tipo derruba o compilador do Swift 6.2 (CI). O erro sai por variável capturada.
-    private static func writeBuffer<T>(_ device: Device, _ buffer: CajuBufferHandle, _ values: [T])
-        throws(CajuRHIError)
-    {
+    private static func writeBuffer<T>(
+        _ device: Device, _ buffer: CajuBufferHandle, _ values: [T], offset: Int = 0
+    ) throws(CajuRHIError) {
         var failure: CajuRHIError?
         values.withUnsafeBytes { raw in
-            do throws(CajuRHIError) { try device.writeBuffer(buffer, offset: 0, bytes: raw) } catch {
+            do throws(CajuRHIError) { try device.writeBuffer(buffer, offset: offset, bytes: raw) } catch {
                 failure = error
             }
         }
@@ -172,11 +234,7 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
         let blended = material.alphaMode == .blend
         let descriptor = CajuRenderPipelineDescriptor(
             vertex: vertex, fragment: fragment,
-            vertexAttributes: [
-                CajuVertexAttribute(location: 0, format: .float3, offset: 0, bufferIndex: 0),
-                CajuVertexAttribute(location: 1, format: .float3, offset: 12, bufferIndex: 0),
-                CajuVertexAttribute(location: 2, format: .float2, offset: 24, bufferIndex: 0),
-            ],
+            vertexAttributes: Self.vertexAttributes,
             vertexLayouts: [CajuVertexBufferLayout(bufferIndex: 0, stride: CajuMeshVertexLayout.stride)],
             colorTargets: [CajuColorTargetState(format: colorFormat, blend: blended ? .alpha : nil)],
             depth: CajuDepthState(format: depthFormat, compare: .less, writesDepth: !blended),
@@ -405,6 +463,68 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
         }
         lastDrawCalls = view == nil ? 0 : batches.count
 
+        // Passe `shadow` (R-1b): profundidade vista da luz, de tudo que projeta sombra (mesmo fora da tela).
+        shadowInstances.removeAll(keepingCapacity: true)
+        shadowBatches.removeAll(keepingCapacity: true)
+        var lightViewProjection = CajuMat4.identity
+        var shadowEnabled = false
+        if view != nil, let light = world.light, light.castsShadow,
+            let lightVP = Self.lightViewProjection(world: world, direction: light.direction)
+        {
+            lightViewProjection = lightVP
+            for i in 0..<world.count where world.castsShadow[i] {
+                let handle = world.meshes[i]
+                let slot = Int(handle.index)
+                guard slot < meshes.count, let resident = meshes[slot],
+                    resident.generation == handle.generation,
+                    shadowInstances.count < drawList.capacity
+                else { continue }
+                let model = world.worldMatrices[i]
+                shadowInstances.append(InstanceData(model: model, normalMatrix: model))
+                if let last = shadowBatches.last, last.mesh == slot {
+                    shadowBatches[shadowBatches.count - 1].count += 1
+                } else {
+                    shadowBatches.append((first: shadowInstances.count - 1, count: 1, mesh: slot))
+                }
+            }
+            shadowEnabled = !shadowInstances.isEmpty
+        }
+        lastFrameHadShadow = shadowEnabled
+        let shadowOffset = drawList.capacity * MemoryLayout<InstanceData>.stride
+        if shadowEnabled || !shadowMapInitialized {
+            do {
+                if !shadowInstances.isEmpty {
+                    try Self.writeBuffer(device, instanceBuffer, shadowInstances, offset: shadowOffset)
+                }
+                let shadowPass = CajuRenderPassDescriptor(
+                    colorAttachments: [],
+                    depthAttachment: CajuDepthAttachment(
+                        texture: .texture(shadowMap), load: .clear(SIMD4(1, 0, 0, 0)), store: .store),
+                    label: "shadow")
+                let shadowPipeline = self.shadowPipeline
+                let shadowBatches = self.shadowBatches
+                let meshes = self.meshes
+                try commands.withRenderPass(shadowPass) { encoder in
+                    guard !shadowBatches.isEmpty else { return }
+                    var lightVP = lightViewProjection
+                    encoder.setPipeline(shadowPipeline)
+                    withUnsafeBytes(of: &lightVP) { encoder.setBytes($0, index: 0, stage: .vertex) }
+                    encoder.setBuffer(instanceBuffer, offset: shadowOffset, index: 1, stage: .vertex)
+                    for batch in shadowBatches {
+                        guard let mesh = meshes[batch.mesh] else { continue }
+                        encoder.setVertexBuffer(mesh.vertexBuffer, offset: 0, index: 0)
+                        encoder.drawIndexed(
+                            indexCount: mesh.indexCount, instanceCount: batch.count,
+                            indexBuffer: mesh.indexBuffer,
+                            indexType: .uint32, indexOffset: 0, baseVertex: 0, firstInstance: batch.first)
+                    }
+                }
+                shadowMapInitialized = true
+            } catch {
+                throw .rhi(error)
+            }
+        }
+
         let pass = CajuRenderPassDescriptor(
             colorAttachments: [color],
             depthAttachment: CajuDepthAttachment(
@@ -417,6 +537,9 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
         let materials = self.materials
         let sampler = self.sampler
         let batches = self.batches
+        let shadowMap = self.shadowMap
+        let shadowSampler = self.shadowSampler
+        let shadowParams = SIMD4<Float>(shadowEnabled ? 1 : 0, 0.002, 1 / Float(shadowMapSize), 0)
         do {
             try commands.withRenderPass(pass) { encoder in
                 guard let view else { return }
@@ -425,6 +548,8 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
                 var materialUniforms = MaterialUniforms()
                 materialUniforms.ambient = SIMD4(ambient.r, ambient.g, ambient.b, 0)
                 materialUniforms.cameraPosition = SIMD4(view.position.storage, 1)
+                materialUniforms.shadowParams = shadowParams
+                materialUniforms.lightViewProjection = lightViewProjection
                 if let light {
                     let toLight = -light.direction
                     materialUniforms.lightDirection = SIMD4(toLight.storage, 1)
@@ -456,6 +581,8 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
                     }
                     encoder.setTexture(material.texture, index: 0, stage: .fragment)
                     encoder.setSampler(sampler, index: 0, stage: .fragment)
+                    encoder.setTexture(shadowMap, index: 1, stage: .fragment)
+                    encoder.setSampler(shadowSampler, index: 1, stage: .fragment)
                     encoder.drawIndexed(
                         indexCount: mesh.indexCount, instanceCount: batch.count,
                         indexBuffer: mesh.indexBuffer,
@@ -474,7 +601,7 @@ struct InstanceData {
     var normalMatrix: CajuMat4
 }
 
-/// `MaterialUniforms` dos shaders de cena (7 × `float4`, 112 bytes).
+/// `MaterialUniforms` dos shaders de cena (8 × `float4` + `float4x4`, 192 bytes).
 struct MaterialUniforms {
     var baseColor = SIMD4<Float>(1, 1, 1, 1)
     var emissive = SIMD4<Float>(0, 0, 0, 0)
@@ -483,4 +610,6 @@ struct MaterialUniforms {
     var lightColor = SIMD4<Float>(0, 0, 0, 0)
     var ambient = SIMD4<Float>(0, 0, 0, 0)
     var cameraPosition = SIMD4<Float>(0, 0, 0, 1)
+    var shadowParams = SIMD4<Float>(0, 0, 0, 0)
+    var lightViewProjection = CajuMat4.identity
 }

@@ -129,6 +129,20 @@ extension CajuMeshAsset {
             vertices: vertices, indices: indices, bounds: CajuAABB(min: -extent, max: extent))
     }
 
+    /// Plano quadrado de lado `size` no plano XZ, normal `+Y`, centrado na origem.
+    public static func plane(size: Float = 1) -> CajuMeshAsset {
+        let h = size / 2
+        let vertices: [Float] = [
+            -h, 0, h, 0, 1, 0, 0, 1,
+            h, 0, h, 0, 1, 0, 1, 1,
+            h, 0, -h, 0, 1, 0, 1, 0,
+            -h, 0, -h, 0, 1, 0, 0, 0,
+        ]
+        return CajuMeshAsset(
+            vertices: vertices, indices: [0, 1, 2, 0, 2, 3],
+            bounds: CajuAABB(min: CajuVec3(-h, -0.001, -h), max: CajuVec3(h, 0.001, h)))
+    }
+
     /// Esfera UV de raio `radius` (`segments` meridianos, `rings` paralelos), normais suaves.
     public static func sphere(radius: Float = 0.5, segments: Int = 32, rings: Int = 16) -> CajuMeshAsset {
         let segments = max(segments, 3)
