@@ -354,7 +354,17 @@ enum DeterministicJSON {
     case int(Int)
     case bool(Bool)
     case array([DeterministicJSON])
-    case object([(String, DeterministicJSON)])
+    case members([Member])
+
+    /// Par chave/valor num `struct` (tupla recursiva no `enum` dá "circular reference" no Swift 6.2 do CI).
+    struct Member {
+        let key: String
+        let value: DeterministicJSON
+    }
+
+    static func object(_ pairs: [(String, DeterministicJSON)]) -> DeterministicJSON {
+        .members(pairs.map { Member(key: $0.0, value: $0.1) })
+    }
 
     func format(indent: Int = 0) -> String {
         var out = ""
@@ -389,8 +399,8 @@ enum DeterministicJSON {
             }
             out.append(String(repeating: " ", count: indent))
             out.append("]")
-        case .object(let pairs):
-            let sorted = pairs.sorted { $0.0.utf8.lexicographicallyPrecedes($1.0.utf8) }
+        case .members(let pairs):
+            let sorted = pairs.sorted { $0.key.utf8.lexicographicallyPrecedes($1.key.utf8) }
             if sorted.isEmpty {
                 out.append("{}")
                 return
@@ -398,7 +408,9 @@ enum DeterministicJSON {
             out.append("{\n")
             let childIndent = indent + 2
             let pad = String(repeating: " ", count: childIndent)
-            for (idx, (key, value)) in sorted.enumerated() {
+            for (idx, member) in sorted.enumerated() {
+                let key = member.key
+                let value = member.value
                 out.append(pad)
                 appendEscapedString(key, to: &out)
                 out.append(": ")
