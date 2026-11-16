@@ -22,6 +22,8 @@
         var attachmentViews: [Int: VkImageView] = [:]
         /// Imagem de *swapchain*: o *swapchain* é o dono (não destruir aqui).
         let ownsImage: Bool
+        /// *Swapchain* dono da imagem (só imagens de *swapchain*).
+        weak var swapchain: CajuVulkanSwapchain?
 
         init(
             image: VkImage, view: VkImageView, allocation: VmaAllocation?, descriptor: CajuTextureDescriptor,
@@ -98,8 +100,10 @@
 
         /// Cria o dispositivo. `enableSurface` liga as extensões de superfície (apresentação em janela);
         /// o executável de conformidade, sem janela, passa `false`.
-        public init(enableSurface: Bool = false) throws(CajuRHIError) {
-            context = try CajuVulkanContext(enableSurface: enableSurface)
+        /// `enableValidation` liga `VK_LAYER_KHRONOS_validation` se a camada estiver no APK (build de depuração);
+        /// as mensagens vão ao logcat (tag `CajuVulkan`) e a ``validationMessageCounts``.
+        public init(enableSurface: Bool = false, enableValidation: Bool = false) throws(CajuRHIError) {
+            context = try CajuVulkanContext(enableSurface: enableSurface, enableValidation: enableValidation)
             capabilities = context.capabilities
             uniformRing = try VulkanUniformRing(context: context, capacity: 4 << 20)
             boundResources = [VulkanBoundResource](repeating: .none, count: CajuVulkanBindingMap.count)
@@ -185,6 +189,12 @@
             buffers.count + textures.count + samplers.count + shaders.count + renderPipelines.count
         }
 
+        /// `true` se a camada de validação do Khronos foi carregada.
+        public var validationEnabled: Bool { context.validationEnabled }
+
+        /// Erros e avisos reportados pela camada de validação desde a criação.
+        public var validationMessageCounts: (errors: Int, warnings: Int) { context.validationCounts.pointee }
+
         /// Objetos nativos esperando a GPU terminar para serem destruídos.
         public var pendingDestructionCount: Int { garbage.count }
 
@@ -230,7 +240,11 @@
         }
 
         public func createTexture(_ d: CajuTextureDescriptor) throws(CajuRHIError) -> CajuTextureHandle {
-            let handle = textures.insert(try makeTexture(d))
+            insertTexture(try makeTexture(d))
+        }
+
+        func insertTexture(_ texture: VulkanTexture) -> CajuTextureHandle {
+            let handle = textures.insert(texture)
             liveTextures[handle.index] = handle
             return handle
         }
@@ -429,7 +443,7 @@
         public func createSwapchain(_ surface: CajuSurfaceDescriptor) throws(CajuRHIError)
             -> CajuVulkanSwapchain
         {
-            throw .backend(code: cajuVulkanNotImplementedCode)  // fatia E da V-1
+            try CajuVulkanSwapchain(device: self, surface: surface)
         }
 
         // MARK: Destruição (adiada até a GPU terminar)

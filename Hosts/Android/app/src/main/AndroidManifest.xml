@@ -14,7 +14,7 @@
             android:name="android.app.NativeActivity"
             android:exported="true"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|keyboard|navigation|smallestScreenSize|density|uiMode"
-            android:screenOrientation="portrait">
+            android:screenOrientation="fullUser">
             <meta-data android:name="android.app.lib_name" android:value="CajuAndroidHost" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
