@@ -283,7 +283,7 @@ public final class CajuAssetServer: CajuAssetServing {
         let typeID = ObjectIdentifier(A.self)
 
         let task = Task.detached(priority: .utility) {
-            let result = await Self.run(source: source, decode: decode, path: path, limits: limits)
+            let result = await CajuAssetServer.run(source: source, decode: decode, path: path, limits: limits)
             // `nil`: cancelada; nada a publicar.
             guard let result else { return }
             mailbox.postCompletion(

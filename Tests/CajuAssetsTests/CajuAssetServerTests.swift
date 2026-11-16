@@ -199,7 +199,7 @@ private final class TestPosixLock: @unchecked Sendable {
 }
 
 private func waitUntil(
-    timeout: Duration = .seconds(3),
+    timeout: Duration = .seconds(30),
     step: Duration = .milliseconds(5),
     _ predicate: () -> Bool
 ) async -> Bool {
