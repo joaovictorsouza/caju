@@ -28,6 +28,7 @@ let package = Package(
             dependencies: [
                 .product(name: "CajuRHIVulkan", package: "Caju"),
                 .product(name: "CajuRHIConformance", package: "Caju"),
+                .product(name: "CajuRender", package: "Caju"),
             ],
             swiftSettings: [.swiftLanguageMode(.v6), .treatAllWarnings(as: .error)]
         ),

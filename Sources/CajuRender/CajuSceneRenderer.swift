@@ -1,0 +1,416 @@
+import CajuAssets
+import CajuMath
+import CajuRHI
+
+/// Renderer de cena da R-1a (ADR 0023): residência na GPU dos assets de render, cache de PSO em memória,
+/// draw list e passe `main` forward com MSAA transitório resolvido no alvo.
+///
+/// Uso por quadro, na *thread* do jogo: `renderWorld.extract(...)`, `renderer.prepare(world:assets:)` (eventos
+/// de asset e uploads sob o orçamento) e `renderer.record(world:into:target:)` dentro do *command buffer*.
+/// Genérico no dispositivo (Metal, Vulkan, null): os shaders vêm em MSL ou SPIR-V conforme o backend.
+public final class CajuSceneRenderer<Device: CajuRenderDevice> {
+    public let device: Device
+    public let colorFormat: CajuPixelFormat
+    public let sampleCount: Int
+    public let depthFormat: CajuPixelFormat = .depth32Float
+    /// Orçamento de upload por quadro (malhas e texturas novas); o que não couber espera o próximo quadro.
+    public var uploadBudget = CajuUploadBudget(bytesPerFrame: 4 << 20)
+    public private(set) var drawList: CajuDrawList
+
+    private let vertex: CajuShaderFunction
+    private let fragment: CajuShaderFunction
+    private let whiteTexture: CajuTextureHandle
+    private let sampler: CajuSamplerHandle
+
+    private struct PipelineKey: Hashable {
+        var model: CajuMaterialModel
+        var alphaMode: CajuAlphaMode
+        var doubleSided: Bool
+    }
+    private var pipelineIndex: [PipelineKey: UInt32] = [:]
+    private var pipelines: [CajuRenderPipelineHandle] = []
+
+    private struct ResidentMesh {
+        var generation: UInt32
+        var vertexBuffer: CajuBufferHandle
+        var indexBuffer: CajuBufferHandle
+        var indexCount: Int
+    }
+    private struct ResidentMaterial {
+        var generation: UInt32
+        var asset: CajuMaterialAsset
+        var texture: CajuTextureHandle
+        var pipeline: UInt32
+        var queue: CajuRenderQueue
+    }
+    private struct ResidentTexture {
+        var generation: UInt32
+        var texture: CajuTextureHandle
+    }
+    /// Indexados pelo índice do handle do asset (capacidade fixa; ver `capacityExceeded`).
+    private var meshes: [ResidentMesh?]
+    /// Posição 0 = material substituto; o asset de índice `i` fica em `i + 1`.
+    private var materials: [ResidentMaterial?]
+    private var textures: [ResidentTexture?]
+
+    public init(
+        device: Device, colorFormat: CajuPixelFormat, sampleCount: Int = 4, drawCapacity: Int = 4096,
+        residentCapacity: Int = 1024
+    ) throws(CajuRenderError) {
+        self.device = device
+        self.colorFormat = colorFormat
+        self.sampleCount = device.capabilities.sampleCounts.supports(sampleCount) ? sampleCount : 1
+        drawList = CajuDrawList(capacity: drawCapacity)
+        meshes = Array(repeating: nil, count: residentCapacity)
+        materials = Array(repeating: nil, count: residentCapacity + 1)
+        textures = Array(repeating: nil, count: residentCapacity)
+        do {
+            let shaders: (vertex: CajuShaderModuleDescriptor, fragment: CajuShaderModuleDescriptor)
+            if device.capabilities.backendName == "Vulkan" {
+                shaders = (
+                    CajuShaderModuleDescriptor(
+                        format: .spirv, code: Self.bytes(CajuSceneShaderSPIRV.vertex), label: "scene.vert"),
+                    CajuShaderModuleDescriptor(
+                        format: .spirv, code: Self.bytes(CajuSceneShaderSPIRV.fragment), label: "scene.frag")
+                )
+            } else {
+                let msl = CajuShaderModuleDescriptor(
+                    format: .metalSource, code: Array(CajuSceneShaderMSL.source.utf8), label: "scene")
+                shaders = (msl, msl)
+            }
+            let vertexModule = try device.createShaderModule(shaders.vertex)
+            let fragmentModule =
+                shaders.vertex == shaders.fragment
+                ? vertexModule : try device.createShaderModule(shaders.fragment)
+            let isMetal = shaders.vertex == shaders.fragment
+            vertex = CajuShaderFunction(module: vertexModule, entryPoint: isMetal ? "caju_scene_vs" : "main")
+            fragment = CajuShaderFunction(
+                module: fragmentModule, entryPoint: isMetal ? "caju_scene_fs" : "main")
+            let white = try device.createTexture(
+                CajuTextureDescriptor(
+                    format: .rgba8Unorm, width: 1, height: 1, usage: [.sampled, .copyDestination],
+                    label: "white"))
+            try [UInt8](repeating: 255, count: 4).withUnsafeBytes { raw throws(CajuRHIError) in
+                try device.writeTexture(
+                    white, mipLevel: 0, slice: 0, width: 1, height: 1, bytesPerRow: 4, bytes: raw)
+            }
+            whiteTexture = white
+            sampler = try device.createSampler(
+                CajuSamplerDescriptor(addressU: .repeat, addressV: .repeat, addressW: .repeat))
+        } catch {
+            throw .rhi(error as? CajuRHIError ?? .outOfMemory)
+        }
+        materials[0] = ResidentMaterial(
+            generation: 0, asset: .fallback, texture: whiteTexture, pipeline: 0, queue: .opaque)
+        materials[0]?.pipeline = try pipeline(for: CajuMaterialAsset.fallback)
+    }
+
+    private static func bytes(_ words: [UInt32]) -> [UInt8] { words.withUnsafeBytes { [UInt8]($0) } }
+
+    // MARK: Pipelines (cache em memória)
+
+    private func pipeline(for material: CajuMaterialAsset) throws(CajuRenderError) -> UInt32 {
+        let key = PipelineKey(
+            model: material.model, alphaMode: material.alphaMode, doubleSided: material.doubleSided)
+        if let index = pipelineIndex[key] { return index }
+        let blended = material.alphaMode == .blend
+        let descriptor = CajuRenderPipelineDescriptor(
+            vertex: vertex, fragment: fragment,
+            vertexAttributes: [
+                CajuVertexAttribute(location: 0, format: .float3, offset: 0, bufferIndex: 0),
+                CajuVertexAttribute(location: 1, format: .float3, offset: 12, bufferIndex: 0),
+                CajuVertexAttribute(location: 2, format: .float2, offset: 24, bufferIndex: 0),
+            ],
+            vertexLayouts: [CajuVertexBufferLayout(bufferIndex: 0, stride: CajuMeshVertexLayout.stride)],
+            colorTargets: [CajuColorTargetState(format: colorFormat, blend: blended ? .alpha : nil)],
+            depth: CajuDepthState(format: depthFormat, compare: .less, writesDepth: !blended),
+            cullMode: material.doubleSided ? .none : .back, frontFace: .counterClockwise,
+            sampleCount: sampleCount,
+            label: "scene")
+        let handle: CajuRenderPipelineHandle
+        do { handle = try device.createRenderPipeline(descriptor) } catch { throw .rhi(error) }
+        let index = UInt32(pipelines.count)
+        pipelines.append(handle)
+        pipelineIndex[key] = index
+        return index
+    }
+
+    /// Pipelines criados até agora (o cenário de referência os cria na primeira carga).
+    public var pipelineCount: Int { pipelines.count }
+
+    // MARK: Residência
+
+    /// Aplica os eventos de asset (descarte e recarga) e sobe na GPU o que o quadro usa e ainda não está lá,
+    /// dentro de `uploadBudget`.
+    public func prepare(world: CajuRenderWorld, assets: some CajuAssetServing) throws(CajuRenderError) {
+        assets.drainEvents { event in
+            guard event.kind == .unloaded || event.kind == .reloaded else { return }
+            if let handle = event.asset.typed(as: CajuMeshAsset.self) { evictMesh(index: Int(handle.index)) }
+            if let handle = event.asset.typed(as: CajuMaterialAsset.self) {
+                evictMaterial(index: Int(handle.index) + 1)
+            }
+            if let handle = event.asset.typed(as: CajuTextureAsset.self) {
+                evictTexture(index: Int(handle.index))
+            }
+        }
+        uploadBudget.beginFrame()
+        for i in 0..<world.count {
+            try makeResident(mesh: world.meshes[i], assets: assets)
+            try makeResident(material: world.materials[i], assets: assets)
+        }
+    }
+
+    private func makeResident(mesh handle: CajuAssetHandle<CajuMeshAsset>, assets: some CajuAssetServing)
+        throws(CajuRenderError)
+    {
+        let slot = Int(handle.index)
+        guard slot < meshes.count else { throw .capacityExceeded(.residentMeshes) }
+        if let resident = meshes[slot], resident.generation == handle.generation { return }
+        guard let mesh = assets.value(of: handle), mesh.isValid else { return }
+        let vertexBytes = mesh.vertices.count * MemoryLayout<Float>.stride
+        let indexBytes = mesh.indices.count * MemoryLayout<UInt32>.stride
+        guard uploadBudget.reserve(vertexBytes + indexBytes) else { return }
+        evictMesh(index: slot)
+        do {
+            let vertexBuffer = try device.createBuffer(
+                CajuBufferDescriptor(
+                    size: vertexBytes, usage: .vertex, storage: .shared, label: "mesh.vertices"))
+            let indexBuffer = try device.createBuffer(
+                CajuBufferDescriptor(size: indexBytes, usage: .index, storage: .shared, label: "mesh.indices")
+            )
+            try mesh.vertices.withUnsafeBytes { raw throws(CajuRHIError) in
+                try device.writeBuffer(vertexBuffer, offset: 0, bytes: raw)
+            }
+            try mesh.indices.withUnsafeBytes { raw throws(CajuRHIError) in
+                try device.writeBuffer(indexBuffer, offset: 0, bytes: raw)
+            }
+            meshes[slot] = ResidentMesh(
+                generation: handle.generation, vertexBuffer: vertexBuffer, indexBuffer: indexBuffer,
+                indexCount: mesh.indices.count)
+        } catch {
+            throw .rhi(error as? CajuRHIError ?? .outOfMemory)
+        }
+    }
+
+    private func makeResident(
+        material handle: CajuAssetHandle<CajuMaterialAsset>, assets: some CajuAssetServing
+    )
+        throws(CajuRenderError)
+    {
+        let slot = Int(handle.index) + 1
+        guard slot < materials.count else { throw .capacityExceeded(.residentMaterials) }
+        if let resident = materials[slot], resident.generation == handle.generation { return }
+        guard handle.generation != 0, let material = assets.value(of: handle) else { return }
+        var texture = whiteTexture
+        if material.baseColorTexture.generation != 0 {
+            guard let resident = try makeResident(texture: material.baseColorTexture, assets: assets) else {
+                return  // textura ainda não está na GPU: fica no substituto mais um quadro
+            }
+            texture = resident
+        }
+        let queue: CajuRenderQueue =
+            switch material.alphaMode {
+            case .opaque: .opaque
+            case .mask: .mask
+            case .blend: .blend
+            }
+        materials[slot] = ResidentMaterial(
+            generation: handle.generation, asset: material, texture: texture,
+            pipeline: try pipeline(for: material), queue: queue)
+    }
+
+    private func makeResident(
+        texture handle: CajuAssetHandle<CajuTextureAsset>, assets: some CajuAssetServing
+    )
+        throws(CajuRenderError) -> CajuTextureHandle?
+    {
+        let slot = Int(handle.index)
+        guard slot < textures.count else { throw .capacityExceeded(.residentMaterials) }
+        if let resident = textures[slot], resident.generation == handle.generation { return resident.texture }
+        guard let asset = assets.value(of: handle), asset.isValid, uploadBudget.reserve(asset.pixels.count)
+        else { return nil }
+        evictTexture(index: slot)
+        do {
+            let texture = try device.createTexture(
+                CajuTextureDescriptor(
+                    format: asset.isSRGB ? .rgba8UnormSRGB : .rgba8Unorm, width: asset.width,
+                    height: asset.height,
+                    usage: [.sampled, .copyDestination], label: "material.baseColor"))
+            try asset.pixels.withUnsafeBytes { raw throws(CajuRHIError) in
+                try device.writeTexture(
+                    texture, mipLevel: 0, slice: 0, width: asset.width, height: asset.height,
+                    bytesPerRow: asset.width * 4, bytes: raw)
+            }
+            textures[slot] = ResidentTexture(generation: handle.generation, texture: texture)
+            return texture
+        } catch {
+            throw .rhi(error as? CajuRHIError ?? .outOfMemory)
+        }
+    }
+
+    private func evictMesh(index: Int) {
+        guard index < meshes.count, let resident = meshes[index] else { return }
+        device.destroy(resident.vertexBuffer)
+        device.destroy(resident.indexBuffer)
+        meshes[index] = nil
+    }
+
+    private func evictMaterial(index: Int) {
+        guard index > 0, index < materials.count else { return }
+        materials[index] = nil
+    }
+
+    private func evictTexture(index: Int) {
+        guard index < textures.count, let resident = textures[index] else { return }
+        device.destroy(resident.texture)
+        textures[index] = nil
+        // Materiais que usavam a textura voltam a ser resolvidos (sobem de novo com a textura nova).
+        for i in 1..<materials.count where materials[i]?.texture == resident.texture { materials[i] = nil }
+    }
+
+    /// Recursos da cena residentes (diagnóstico de vazamento).
+    public var residentMeshCount: Int { meshes.reduce(0) { $0 + ($1 == nil ? 0 : 1) } }
+
+    // MARK: Quadro
+
+    /// Grava o passe `main` no alvo (`target`: textura de 1 amostra com `renderTarget`, por exemplo a imagem
+    /// do *swapchain*). Sem câmera, só limpa com preto.
+    public func record(
+        world: CajuRenderWorld, into commands: inout Device.Queue.CommandBuffer, target: CajuTextureHandle,
+        width: Int, height: Int
+    ) throws(CajuRenderError) {
+        let aspect = Float(max(width, 1)) / Float(max(height, 1))
+        let view = world.makeView(aspect: aspect)
+        if let view {
+            let meshes = self.meshes
+            let materials = self.materials
+            try drawList.build(from: world, view: view) { meshHandle, materialHandle in
+                let meshSlot = Int(meshHandle.index)
+                guard meshSlot < meshes.count, let mesh = meshes[meshSlot],
+                    mesh.generation == meshHandle.generation
+                else { return nil }
+                _ = mesh
+                var materialSlot = Int(materialHandle.index) + 1
+                if materialSlot >= materials.count
+                    || materials[materialSlot]?.generation != materialHandle.generation
+                    || materialHandle.generation == 0
+                {
+                    materialSlot = 0
+                }
+                guard let material = materials[materialSlot] else { return nil }
+                return CajuResolvedDraw(
+                    mesh: CajuRenderMeshID(index: meshHandle.index, generation: meshHandle.generation),
+                    material: CajuRenderMaterialID(index: UInt32(materialSlot), generation: 1),
+                    queue: material.queue, pipeline: material.pipeline)
+            }
+        }
+
+        // Alvos do passe: com MSAA, cor e profundidade multiamostradas transitórias (memoryless quando o
+        // aparelho deixa) resolvidas no alvo; sem MSAA, desenha direto no alvo.
+        let transientStorage: CajuStorageMode =
+            device.capabilities.supportsMemoryless ? .memoryless : .privateGPU
+        let clear = view?.clearColor ?? CajuColor(r: 0, g: 0, b: 0)
+        let clearValue = SIMD4<Float>(clear.r, clear.g, clear.b, clear.a)
+        var color = CajuColorAttachment(texture: .texture(target), load: .clear(clearValue), store: .store)
+        let depthTexture: CajuTextureHandle
+        do {
+            if sampleCount > 1 {
+                let msaa = try device.transientTexture(
+                    CajuTextureDescriptor(
+                        format: colorFormat, width: width, height: height, sampleCount: sampleCount,
+                        usage: .renderTarget, storage: transientStorage, label: "scene.color.msaa"),
+                    slot: -1)
+                color = CajuColorAttachment(
+                    texture: .texture(msaa), load: .clear(clearValue), store: .resolve,
+                    resolveTexture: .texture(target))
+            }
+            depthTexture = try device.transientTexture(
+                CajuTextureDescriptor(
+                    format: depthFormat, width: width, height: height, sampleCount: sampleCount,
+                    usage: .renderTarget, storage: transientStorage, label: "scene.depth"),
+                slot: -2)
+        } catch {
+            throw .rhi(error)
+        }
+
+        let pass = CajuRenderPassDescriptor(
+            colorAttachments: [color],
+            depthAttachment: CajuDepthAttachment(
+                texture: .texture(depthTexture), load: .clear(SIMD4(1, 0, 0, 0))),
+            label: "main")
+        let light = world.light
+        let ambient = world.ambient
+        let items = drawList.items
+        let worldMatrices = world.worldMatrices
+        let pipelines = self.pipelines
+        let meshes = self.meshes
+        let materials = self.materials
+        let sampler = self.sampler
+        do {
+            try commands.withRenderPass(pass) { encoder in
+                guard let view else { return }
+                var boundPipeline = UInt32.max
+                var materialUniforms = MaterialUniforms()
+                materialUniforms.ambient = SIMD4(ambient.r, ambient.g, ambient.b, 0)
+                materialUniforms.cameraPosition = SIMD4(view.position.storage, 1)
+                if let light {
+                    let toLight = -light.direction
+                    materialUniforms.lightDirection = SIMD4(toLight.storage, 1)
+                    materialUniforms.lightColor = SIMD4(
+                        light.color.r * light.intensity, light.color.g * light.intensity,
+                        light.color.b * light.intensity, 0)
+                }
+                for item in items {
+                    guard let mesh = meshes[Int(item.mesh.index)],
+                        let material = materials[Int(item.material.index)]
+                    else { continue }
+                    if material.pipeline != boundPipeline {
+                        encoder.setPipeline(pipelines[Int(material.pipeline)])
+                        boundPipeline = material.pipeline
+                    }
+                    let model = worldMatrices[Int(item.instanceIndex)]
+                    var object = ObjectUniforms(
+                        viewProjection: view.viewProjection, model: model,
+                        normalMatrix: model.inverseAffine?.transposed ?? model)
+                    let asset = material.asset
+                    materialUniforms.baseColor = SIMD4(
+                        asset.baseColor.r, asset.baseColor.g, asset.baseColor.b, asset.baseColor.a)
+                    materialUniforms.emissive = SIMD4(asset.emissive.r, asset.emissive.g, asset.emissive.b, 0)
+                    materialUniforms.params = SIMD4(
+                        asset.metallic, asset.roughness, asset.alphaMode == .mask ? asset.alphaCutoff : 0,
+                        asset.model == .pbr ? 1 : 0)
+                    encoder.setVertexBuffer(mesh.vertexBuffer, offset: 0, index: 0)
+                    withUnsafeBytes(of: &object) { encoder.setBytes($0, index: 0, stage: .vertex) }
+                    withUnsafeBytes(of: &materialUniforms) {
+                        encoder.setBytes($0, index: 0, stage: .fragment)
+                    }
+                    encoder.setTexture(material.texture, index: 0, stage: .fragment)
+                    encoder.setSampler(sampler, index: 0, stage: .fragment)
+                    encoder.drawIndexed(
+                        indexCount: mesh.indexCount, instanceCount: 1, indexBuffer: mesh.indexBuffer,
+                        indexType: .uint32, indexOffset: 0, baseVertex: 0, firstInstance: 0)
+                }
+            }
+        } catch {
+            throw .rhi(error)
+        }
+    }
+}
+
+/// `ObjectUniforms` dos shaders de cena (3 × `float4x4`, 192 bytes).
+struct ObjectUniforms {
+    var viewProjection: CajuMat4
+    var model: CajuMat4
+    var normalMatrix: CajuMat4
+}
+
+/// `MaterialUniforms` dos shaders de cena (7 × `float4`, 112 bytes).
+struct MaterialUniforms {
+    var baseColor = SIMD4<Float>(1, 1, 1, 1)
+    var emissive = SIMD4<Float>(0, 0, 0, 0)
+    var params = SIMD4<Float>(0, 1, 0, 1)
+    var lightDirection = SIMD4<Float>(0, 0, 0, 0)
+    var lightColor = SIMD4<Float>(0, 0, 0, 0)
+    var ambient = SIMD4<Float>(0, 0, 0, 0)
+    var cameraPosition = SIMD4<Float>(0, 0, 0, 1)
+}

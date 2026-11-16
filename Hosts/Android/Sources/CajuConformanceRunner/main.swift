@@ -6,6 +6,7 @@
     import CajuRHI
     import CajuRHIConformance
     import CajuRHIVulkan
+    import CajuRender
 
     #if canImport(Glibc)
         import Glibc
@@ -58,11 +59,26 @@
         let report = CajuRHIConformance.run(VulkanConformanceBackend(device: device))
         for name in report.passed { emit("PASSOU \(name)") }
         for failure in report.failures { emit("FALHOU \(failure.caseName): \(failure.detail)") }
+        // Golden de cena da R-1a (o mesmo do Metal): cubo unlit + esfera PBR, MSAA 4x.
+        var sceneClean = true
+        do {
+            let bytes = try CajuSceneGolden.render(device: device) { texture throws(CajuRHIError) in
+                try device.readTexture(texture)
+            }
+            let problems = CajuSceneGolden.check(bytes)
+            sceneClean = problems.isEmpty
+            emit(problems.isEmpty ? "PASSOU sceneGoldenR1a" : "FALHOU sceneGoldenR1a: \(problems)")
+            let samples = CajuSceneGolden.samples(bytes).map(String.init).joined(separator: ",")
+            emit("amostras sceneGoldenR1a: \(samples)")
+        } catch {
+            sceneClean = false
+            emit("FALHOU sceneGoldenR1a: erro \(error)")
+        }
         emit(
             "recursos vivos=\(device.liveResourceCount) destruição pendente=\(device.pendingDestructionCount) "
                 + "bytes VMA=\(device.allocatedBytes)")
         emit("resultado: \(report.passed.count) passaram, \(report.failures.count) falhas")
-        return report.isClean ? 0 : 1
+        return report.isClean && sceneClean ? 0 : 1
     }
 
     exit(runConformance())
