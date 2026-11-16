@@ -8,6 +8,7 @@ Metas medidas nos aparelhos de referência (Galaxy S22, iPhone 16 Pro; ADR 0007)
 - **Memória:** GPU ≤ 300 MB; residente ≤ 600 MB no cenário de referência.
 - **Sem travadas:** nenhum quadro > 50 ms por compilação de pipeline, upload de textura ou carga de asset.
 - **Quadro sem mudança** de UI custa só uma checagem de sujeira.
+- **Display list da UI** (contrato U-1, [ADR 0026](../adr/0026-ui-display-list-e-dsl.md)): reconstrução reaproveita armazenamento (0 alocação em quadro estável); `revision`/`propsRevision` iguais ⇒ zero trabalho de CPU no batcher; mudança só de desenho altera apenas a tabela de camadas. `body` < 100 ns `(?)`, ≤ 40 draw calls na tela de loja `(?)`; sem *parameter packs* no caminho quente (ADR 0014).
 
 ## Regras
 1. Nenhuma alocação por quadro no caminho quente (verificado por inspeção de SIL/instrumentação em testes dos módulos quentes).
@@ -28,6 +29,15 @@ Fonte: `Tests/CajuModulesTests/CajuFrameGraphBenchmarkTests.swift` e `CajuMetalT
 
 - 50 ciclos de background/resume (recriação de superfície com tamanho alternado, Metal, `CAMetalLayer` sem janela): ΔRSS = 0,14 MB (gate ADR 0006: ≤ 1 MB), recursos vivos constantes.
 - O benchmark roda como teste porque `caju-bench` depende de `Package.swift` (trancado); migrar para o executável é PR dedicado. Números de aparelho (iPhone 16 Pro, S22+) e p95 de quadro: `(?)`. Alocação por quadro do executor no estado estável não foi medida `(?)`.
+
+## R-1: metas propostas do render (contrato; **nenhuma medida ainda**, tudo `(?)`)
+- Extração de 1 000 entidades < 0,5 ms de CPU no aparelho alto; ordenação da draw list de 1 000 itens sem alocação.
+- ≤ 300 draw calls por quadro de cena (instancing em R-1b); zero alocação por quadro estável no `CajuRenderWorld`.
+- Benchmarks da extração e do *sort* entram com R-1a ([ADR 0023](../adr/0023-mundo-de-render-e-extracao.md)).
+
+## AN-1: amostragem SIMD de animação (`CajuAnim`)
+- Zero alocação por quadro estável (`CajuAnimScratchBuffer` e `CajuPoseArena` com capacidade reservada) para esqueletos até 128 juntas `(?)`.
+- Benchmark simples em `Tests/CajuModulesTests/CajuAnimBenchmarkTests.swift` (32 e 128 juntas, amostragem simples e *crossfade*, 1 000 iterações; roda como teste porque `caju-bench` depende de `Package.swift` trancado). Metas e medidas nos aparelhos de referência (iPhone 16 Pro, Galaxy S22+): `(?)`.
 
 
 ## S-0: linhas de base em aparelho (medidas 2026-11-15)

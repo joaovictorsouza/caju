@@ -1,5 +1,4 @@
-/// AssetServer, handles e hot reload.
+/// Namespace do módulo `CajuAssets` (A-1): `CajuAssetServer`, handles tipados, estados de carga e *hot reload*.
 ///
-/// Módulo declarado no M0; a implementação chega na trilha dona deste diretório
-/// (ver `docs/planejamento-engine.md`). Este tipo existe só para o alvo compilar.
+/// Implementação sobre o contrato do ADR 0021. Veja `README.md` do módulo para detalhes de uso e ciclo de vida.
 public enum CajuAssetsModule {}

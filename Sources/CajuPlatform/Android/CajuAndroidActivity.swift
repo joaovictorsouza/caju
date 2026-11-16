@@ -45,6 +45,9 @@
                 push(activity, .surfaceCreated(CajuNativeWindow(raw: UnsafeMutableRawPointer(window))))
             }
             callbacks.pointee.onNativeWindowResized = { activity, _ in push(activity, .surfaceResized) }
+            // Rotação com `configChanges` no manifesto: a janela continua a mesma e nem todo aparelho chama
+            // `onNativeWindowResized`; a mudança de configuração também pede recriar o *swapchain* (V-1).
+            callbacks.pointee.onConfigurationChanged = { push($0, .surfaceResized) }
             callbacks.pointee.onNativeWindowDestroyed = { activity, _ in
                 guard let state = stateOf(activity) else { return }
                 state.channel.events.push(.surfaceDestroyed)

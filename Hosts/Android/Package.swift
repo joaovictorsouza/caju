@@ -6,7 +6,8 @@ import PackageDescription
 let package = Package(
     name: "CajuAndroidHost",
     products: [
-        .library(name: "CajuAndroidHost", type: .dynamic, targets: ["CajuAndroidHost"])
+        .library(name: "CajuAndroidHost", type: .dynamic, targets: ["CajuAndroidHost"]),
+        .executable(name: "caju-conformance", targets: ["CajuConformanceRunner"]),
     ],
     dependencies: [
         .package(name: "Caju", path: "../..")
@@ -16,9 +17,20 @@ let package = Package(
             name: "CajuAndroidHost",
             dependencies: [
                 .product(name: "CajuPlatform", package: "Caju"),
+                .product(name: "CajuRHI", package: "Caju"),
                 .product(name: "CajuRHIVulkan", package: "Caju"),
             ],
             swiftSettings: [.swiftLanguageMode(.v6), .treatAllWarnings(as: .error)]
-        )
+        ),
+        // Suíte de conformidade do RHI no Vulkan, sem janela (`adb shell`); ver scripts/run-conformance.sh.
+        .executableTarget(
+            name: "CajuConformanceRunner",
+            dependencies: [
+                .product(name: "CajuRHIVulkan", package: "Caju"),
+                .product(name: "CajuRHIConformance", package: "Caju"),
+                .product(name: "CajuRender", package: "Caju"),
+            ],
+            swiftSettings: [.swiftLanguageMode(.v6), .treatAllWarnings(as: .error)]
+        ),
     ]
 )

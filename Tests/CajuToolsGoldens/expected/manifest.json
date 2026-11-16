@@ -1,0 +1,15 @@
+{
+  "assets": [
+    {
+      "path": "alpha.txt",
+      "sha256": "023c4432cff49ba4b574669bd85c7d7fb521f06f6259cad8061c3aeabb50613a",
+      "size": 17
+    },
+    {
+      "path": "nested/beta.bin",
+      "sha256": "be45cb2605bf36bebde684841a28f0fd43c69850a3dce5fedba69928ee3a8991",
+      "size": 16
+    }
+  ],
+  "version": 1
+}

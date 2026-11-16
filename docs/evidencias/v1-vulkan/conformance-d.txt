@@ -1,0 +1,10 @@
+dispositivo: Adreno (TM) 730 (Vulkan)
+memoryless=true amostras=7 astc=true maxTex=16384
+PASSOU singleSampleTriangleGolden
+PASSOU msaaResolveGolden
+PASSOU cullAndWindingFollowYUpNDC
+PASSOU textureUploadRoundTrip
+PASSOU renderPassValidationMatchesNull
+PASSOU destroyedHandlesAreRejected
+recursos vivos=13 destruição pendente=1 bytes VMA=134217728
+resultado: 6 passaram, 0 falhas
