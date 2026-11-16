@@ -1,6 +1,6 @@
 import Foundation
 
-#if canImport(CoreFoundation)
+#if canImport(Darwin)
     import CoreFoundation
 #endif
 
@@ -1100,7 +1100,7 @@ public enum GLTFValidator {
     // MARK: - Helpers de tipos JSON (Foundation)
 
     private static func jsonBool(_ value: Any) -> Bool? {
-        #if canImport(CoreFoundation)
+        #if canImport(Darwin)
             if let num = value as? NSNumber, CFGetTypeID(num) == CFBooleanGetTypeID() {
                 return num.boolValue
             }
@@ -1124,7 +1124,7 @@ public enum GLTFValidator {
         guard !isJSONBool(value), let num = value as? NSNumber else {
             throw .invalid(context: context, reason: "inteiro esperado")
         }
-        #if canImport(CoreFoundation)
+        #if canImport(Darwin)
             if CFNumberIsFloatType(num) {
                 let d = num.doubleValue
                 guard d.isFinite, let exact = Int(exactly: d) else {
