@@ -1,6 +1,6 @@
 # ADR 0021: Assets: handles geracionais, estados de carga e ciclo de vida (A-1)
 
-**Status:** Proposto (esboço do contrato; vira Aceito no merge da implementação da A-1, ou é ajustado antes disso).
+**Status:** Aceito (implementado em `CajuAssets`: `CajuAssetServer`, fontes e rastreador ECS).
 
 ## Contexto
 A Onda 1 (brief `docs/briefs/onda-1.md`) exige que A-1 publique o contrato do `AssetServer` antes da implementação, porque R-1 (malhas e texturas na GPU) e AN-1 (clipes) consomem handles. O ECS guarda componentes em colunas `BitwiseCopyable` sem ARC (ADR 0014), o caminho quente não pode alocar (CLAUDE.md) e os parsers (`CajuAssetsCore`, ADR 0017) já devolvem dados validados a partir de bytes.
@@ -23,9 +23,10 @@ A Onda 1 (brief `docs/briefs/onda-1.md`) exige que A-1 publique o contrato do `A
 - **Entregar a carga no meio do quadro:** estado instável durante sistemas; descartado.
 
 ## Consequências
-- R-1 e AN-1 podem depender já de `CajuAssetHandle`, `CajuAssetState`, `CajuAssetEvent` e `CajuAssetServing`.
-- A implementação precisa de uma caixa de correio *thread-safe* sem Foundation (`Synchronization.Mutex` exige iOS 18; o mínimo é iOS 17): escolha na implementação, medida, com TSan.
-- Testes do contrato ficam em `CajuModulesTests` até existir o alvo `CajuAssetsTests` (PR dedicado ao `Package.swift`).
+- R-1 e AN-1 podem depender de `CajuAssetHandle`, `CajuAssetState`, `CajuAssetEvent` e `CajuAssetServing`.
+- A caixa de correio *thread-safe* (`CajuAssetMailbox`) usa `pthread_mutex_t` encapsulado sem Foundation (compatível com iOS 17+, Linux e Android) e troca buffers já reservados em `applyCompletions()`; verificada com `swift test --sanitize=thread` e zero alocações no SIL otimizado das consultas (`state`, `value`, `error`, `revision`).
+- A limpeza automática de handles em componentes ECS fica disponível de forma opt-in via `CajuAssetComponent` e `CajuAssetHandleTracker`.
+- Testes do contrato e do servidor ficam em `CajuModulesTests` até existir o alvo `CajuAssetsTests` (PR dedicado ao `Package.swift`).
 
 ## Quando reabrir
 - Se o *release* manual se mostrar propenso a vazamento (avaliar handle forte opcional por cima do fraco).
