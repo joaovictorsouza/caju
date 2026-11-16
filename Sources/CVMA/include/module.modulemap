@@ -1,0 +1,4 @@
+module CVMA [system] {
+    header "CVMA.h"
+    export *
+}
