@@ -1,5 +1,5 @@
 /// Renderização (extração, frame graph, materiais).
 ///
-/// Módulo declarado no M0; a implementação chega na trilha dona deste diretório
-/// (ver `docs/planejamento-engine.md`). Este tipo existe só para o alvo compilar.
+/// Contrato da trilha R-1 em `CajuRenderContract.swift` (ADR 0023, proposto); a implementação
+/// (`CajuRenderWorld`, extração, sombra, instancing, skinning) chega em R-1a e R-1b.
 public enum CajuRenderModule {}
