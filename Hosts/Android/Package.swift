@@ -17,6 +17,7 @@ let package = Package(
             name: "CajuAndroidHost",
             dependencies: [
                 .product(name: "CajuPlatform", package: "Caju"),
+                .product(name: "CajuRHI", package: "Caju"),
                 .product(name: "CajuRHIVulkan", package: "Caju"),
             ],
             swiftSettings: [.swiftLanguageMode(.v6), .treatAllWarnings(as: .error)]

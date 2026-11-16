@@ -1,6 +1,6 @@
 #!/bin/sh
 # Compila os GLSL de Hosts/Android/shaders para SPIR-V e gera os arquivos Swift com as palavras:
-# - shaders/triangle.{vert,frag}        → Sources/CajuRHIVulkan/CajuVulkanTriangleShaders.swift
+# - shaders/triangle.{vert,frag}        → Hosts/Android/Sources/CajuAndroidHost/TriangleShaders.swift
 # - shaders/conformance/*.{vert,frag}   → Hosts/Android/Sources/CajuConformanceRunner/ConformanceShaders.swift
 # Requer glslc (Vulkan SDK ou NDK em shader-tools/).
 set -eu
@@ -29,8 +29,8 @@ generate() {  # $1 = saída, $2 = nome do enum, $3 = doc, depois pares "nome arq
   echo "gerado $out"
 }
 
-generate "$root/Sources/CajuRHIVulkan/CajuVulkanTriangleShaders.swift" CajuVulkanTriangleShaders \
-  "SPIR-V do triângulo (vertex e fragment)." \
+generate "$root/Hosts/Android/Sources/CajuAndroidHost/TriangleShaders.swift" TriangleShaders \
+  "SPIR-V do triângulo do host (vertex e fragment)." \
   vertex "$shaders/triangle.vert" fragment "$shaders/triangle.frag"
 
 generate "$root/Hosts/Android/Sources/CajuConformanceRunner/ConformanceShaders.swift" ConformanceShaders \

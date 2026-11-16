@@ -1,22 +1,24 @@
 # CajuRHIVulkan
 
-Backend Vulkan do RHI (Android/Linux).
+Backend Vulkan do `CajuRHI` (Android). Decisões: [ADR 0024](../../docs/adr/0024-vulkan-vma-e-sincronizacao.md) (VMA, ligação de recursos, layouts, swapchain), [ADR 0015](../../docs/adr/0015-contrato-rhi-e-platform.md) (contrato), [ADR 0019](../../docs/adr/0019-host-android-build-e-link.md) (host).
 
 - **Camada:** 2 (dependências só para baixo; ver §5 do plano).
-- **Trilha dona:** TB-Android.
-- **Estado:** primeiro marco do TB-Android. `CajuVulkanTriangleRenderer` desenha um triângulo girando em Vulkan 1.1 sobre uma `ANativeWindow` (S22+, Adreno 730). **Ainda não implementa o contrato `CajuRHI`** (ADR 0015): é um renderer específico que valida instância, dispositivo, swapchain, render pass, pipeline e sincronização no aparelho. O backend `CajuRHI` vem depois, reaproveitando estas peças.
-- **Só no Android:** o renderer fica sob `#if os(Android)` e usa o `CVulkan` ([ADR 0019](../../docs/adr/0019-host-android-build-e-link.md)). `CajuVulkanSwapchainPlan` (escolha de contagem de imagens, extensão e formato) e `CajuVulkanError` são puros e testados no host.
+- **Trilha dona:** V-1 ([brief](../../docs/briefs/v1-vulkan.md)).
+- **Estado:** implementa `CajuRenderDevice`, `CajuQueue`, `CajuCommandBuffer`, encoders de render e cópia e `CajuSwapchain` em Vulkan 1.1. A suíte de conformidade (`CajuRHIConformance`) passa 6/6 no Galaxy S22+ com os mesmos valores do Metal (`docs/evidencias/v1-vulkan/`). Compute ainda não (`capabilities.supportsCompute == false`).
+- **Só no Android:** o código nativo fica sob `#if os(Android)` e usa `CVulkan` + `CVMA`. `CajuVulkanSwapchainPlan` e `CajuVulkanShaderReflection`/`CajuVulkanBindingMap` são puros e testados no host.
 
 ## API
-- `CajuVulkanTriangleRenderer`: `init()` cria a instância; `attach(window:)` cria superfície, dispositivo (1ª vez) e swapchain; `drawFrame()` (FIFO, 2 quadros em voo, sem alocação de heap); `resize()`; `detach()` (idempotente). Tudo na Game Thread.
-- Erros tipados `CajuVulkanError` (`throws(CajuVulkanError)`): sem `!`/`fatalError`.
-- Shaders: `Hosts/Android/shaders/*.vert|frag` → `scripts/compile-shaders.sh` → `CajuVulkanTriangleShaders.swift` (gerado).
+- `CajuVulkanDevice(enableSurface:enableValidation:)`: `enableSurface` liga as extensões de superfície (o executável de conformidade, sem janela, passa `false`); `enableValidation` carrega `VK_LAYER_KHRONOS_validation` se estiver no APK e expõe `validationMessageCounts`.
+- Diagnóstico: `liveResourceCount`, `pendingDestructionCount`, `allocatedBytes` (VMA), `transientTextureCount`.
+- `readTexture(_:)`: leitura do mip 0 de uma textura `shared` (conformidade e goldens).
+- `CajuVulkanSwapchain`: FIFO, 2 quadros em voo, `preTransform = IDENTITY`, `compositorRotation` para diagnóstico.
 
-## Fora do escopo deste marco
-VMA (o triângulo não tem buffers), *validation layers*, pré-rotação da swapchain (o manifesto fixa retrato), MSAA e *frame graph*.
+## Ligação de recursos (shaders SPIR-V)
+`binding` explícito no set 0, no espaço do contrato: buffers `0..15` (vértice) e `16..31` (fragmento), texturas `32..47`/`48..63`, samplers `64..79`/`80..95`. O fluxo de vértices usa `setVertexBuffer(index:)` = *binding* de vértice `index`. `setBytes` vira um buffer de uniforme no *binding* do índice.
 
 ## Dependências
-- `CajuRHI`, `CVulkan` (só Android)
+- `CajuRHI`, `CVulkan` e `CVMA` (só Android)
 
 ## Como testar
-`swift test --filter CajuRHIVulkanTests` (partes puras, no host). No aparelho: `Hosts/Android/README.md`.
+- Host: `swift test --filter CajuRHIVulkanTests` (plano de swapchain, reflexão de SPIR-V, mapa de bindings).
+- Aparelho: `Hosts/Android/scripts/run-conformance.sh` (suíte de conformidade) e `Hosts/Android/scripts/lifecycle-cycles.sh` (rotação + Home/volta com RSS e validação). Ver `Hosts/Android/README.md`.

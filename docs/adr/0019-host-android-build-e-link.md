@@ -1,6 +1,6 @@
 # ADR 0019: Host Android: NativeActivity em Swift, `CVulkan` e link com o NDK
 
-**Status:** Aceito (TB-Android; implementa os ADR 0007 e 0008, não os substitui).
+**Status:** Aceito (TB-Android; implementa os ADR 0007 e 0008, não os substitui). A parte de **link manual** foi substituída pelo [ADR 0024](0024-vulkan-vma-e-sincronizacao.md): com o toolchain do swift.org 6.4.2, `swift build --product` liga direto.
 
 ## Contexto
 O TB-Android (ADR 0006, limite de 3 dias pelo ADR 0011) precisava de um APK com Swift e Vulkan no Galaxy S22+ (Snapdragon 8 Gen 1, Adreno 730). Três arestas apareceram: como falar com a `Activity` sem Java, como importar os cabeçalhos Vulkan (o `Package.swift` é trancado e só muda em commit dedicado), e como ligar a biblioteca Swift no Mac.

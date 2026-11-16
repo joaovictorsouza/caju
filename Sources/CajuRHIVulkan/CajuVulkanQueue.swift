@@ -11,8 +11,20 @@
         }
 
         public func submit(_ commandBuffer: CajuVulkanCommandBuffer) throws(CajuRHIError) {
-            let serial = try device.context.submit(commandBuffer.handle)
-            device.uniformRing.mark(serial: serial)
+            var serial: UInt64
+            if let presentation = commandBuffer.presentation,
+                let semaphores = presentation.swapchain.semaphores(for: presentation.image)
+            {
+                serial = try device.context.submit(
+                    commandBuffer.handle, waitSemaphore: semaphores.wait,
+                    waitStage: VkPipelineStageFlags(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT.rawValue),
+                    signalSemaphore: semaphores.signal)
+                device.uniformRing.mark(serial: serial)
+                try presentation.swapchain.present(image: presentation.image, serial: serial)
+            } else {
+                serial = try device.context.submit(commandBuffer.handle)
+                device.uniformRing.mark(serial: serial)
+            }
             device.collectGarbage()
         }
 
@@ -29,6 +41,13 @@
 
         unowned let device: CajuVulkanDevice
         let handle: VkCommandBuffer
+        /// Apresentação agendada por `present` (feita pela fila logo depois do `vkQueueSubmit`).
+        var presentation: (swapchain: CajuVulkanSwapchain, image: Int)?
+
+        init(device: CajuVulkanDevice, handle: VkCommandBuffer) {
+            self.device = device
+            self.handle = handle
+        }
 
         public mutating func withRenderPass(
             _ descriptor: CajuRenderPassDescriptor, _ body: (inout CajuVulkanRenderEncoder) -> Void
@@ -56,7 +75,12 @@
         }
 
         public mutating func present(_ image: consuming CajuSwapchainImage) throws(CajuRHIError) {
-            throw .backend(code: cajuVulkanNotImplementedCode)  // fatia E da V-1
+            guard presentation == nil else { throw .invalidUsage(.encoderAlreadyEnded) }
+            guard let record = device.textures.value(for: image.texture), let swapchain = record.swapchain
+            else { throw .invalidHandle(index: image.texture.index, generation: image.texture.generation) }
+            // Imagem nunca desenhada neste quadro: leva ao layout de apresentação.
+            device.transition(handle, record, to: VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
+            presentation = (swapchain, image.imageIndex)
         }
 
         private static func memoryBarrier(

@@ -49,9 +49,4 @@ struct CajuVulkanSwapchainPlanTests {
             Plan.chooseFormat([.init(format: 50, colorSpace: 1_000_104_001)])
                 == .init(format: 50, colorSpace: 1_000_104_001))
     }
-
-    @Test func errorsAreEquatable() {
-        #expect(CajuVulkanError.vulkan(step: .swapchain, code: -4) == .vulkan(step: .swapchain, code: -4))
-        #expect(CajuVulkanError.noSuitableDevice != .noSurfaceFormat)
-    }
 }

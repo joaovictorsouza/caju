@@ -1,39 +1,32 @@
 #!/bin/sh
-# Compila o host Swift para arm64-v8a e organiza os .so em app/src/main/jniLibs/arm64-v8a.
+# Compila o host Swift (biblioteca dinâmica CajuAndroidHost) para arm64-v8a e organiza os .so em
+# app/src/main/jniLibs/arm64-v8a, com o runtime do Swift e a libc++ (DT_NEEDED transitivo).
 #
-# Por que liga à mão: o toolchain do Xcode não traz `swift-autolink-extract`, que o
-# `swift build` precisa para o passo de link no Android. Compilamos só os objetos
-# (`--target`) e ligamos com o clang/lld do NDK + o runtime do Swift SDK for Android.
+# Requer o toolchain swift.org da mesma versão do Swift SDK for Android (6.4.2; ver README.md): com ele o
+# `swift build --product` liga direto, inclusive o alvo C++ do VMA. O toolchain do Xcode não liga no Android.
+# CAJU_VALIDATION=1 copia também a camada de validação do Khronos (scripts/fetch-validation-layer.sh).
 set -eu
 here="$(cd "$(dirname "$0")/.." && pwd)"
 ndk="${ANDROID_NDK_HOME:?defina ANDROID_NDK_HOME (NDK r30)}"
+export TOOLCHAINS="${TOOLCHAINS:-org.swift.642202610261a}"
 config="${CAJU_CONFIG:-debug}"
+case "$config" in release) dir=Release ;; *) dir=Debug ;; esac
 triple=aarch64-unknown-linux-android29
 
-sdk_root="$(ls -d "$HOME"/Library/org.swift.swiftpm/swift-sdks/*android*.artifactbundle/swift-android | head -n 1)"
+# Swift SDK for Android: ~/Library/org.swift.swiftpm (macOS) ou ~/.swiftpm (Linux, CI).
+sdk_root="$(ls -d "$HOME"/Library/org.swift.swiftpm/swift-sdks/*android*.artifactbundle/swift-android \
+  "$HOME"/.swiftpm/swift-sdks/*android*.artifactbundle/swift-android 2>/dev/null | head -n 1)"
 runtime="$sdk_root/swift-resources/usr/lib/swift-aarch64/android"
 llvm="$(ls -d "$ndk"/toolchains/llvm/prebuilt/*)"
 out="$here/app/src/main/jniLibs/arm64-v8a"
 
 cd "$here"
-swift build -c "$config" --swift-sdk "$triple" --target CajuAndroidHost
-
-objects="$(find .build/out/Intermediates.noindex -path "*Debug-android-aarch64*" -name "*.o" \
-  \( -path "*CajuAndroidHost-t.build*" -o -path "*CajuPlatform-t.build*" -o -path "*CajuRHIVulkan-t.build*" \
-     -o -path "*CajuRHI-t.build*" -o -path "*CajuCore-t.build*" -o -path "*CajuMath-t.build*" \) | sort)"
+swift build -c "$config" --swift-sdk "$triple" --product CajuAndroidHost
 
 mkdir -p "$out"
 rm -f "${out:?}"/*.so
-# shellcheck disable=SC2086
-"$llvm/bin/aarch64-linux-android29-clang" -shared -fuse-ld=lld \
-  -Wl,-soname,libCajuAndroidHost.so -Wl,-z,max-page-size=16384 -Wl,-rpath,'$ORIGIN' \
-  -Wl,--export-dynamic-symbol=ANativeActivity_onCreate \
-  -o "$out/libCajuAndroidHost.so" $objects "$runtime/aarch64/swiftrt.o" \
-  -L"$runtime" -lswiftCore -lswift_Concurrency -lswift_StringProcessing -lswiftSynchronization \
-  -lswiftAndroid -lvulkan -landroid -llog -lc++_shared -ldl -lm
+cp ".build/out/Products/$dir-android-aarch64/libCajuAndroidHost.so" "$out/"
 
-# Runtime do Swift empacotado junto: resolve as dependências (DT_NEEDED) transitivas
-# da lib do host dentro do Swift SDK (Swift 6.4.2; ver docs/adr/0019).
 readelf="$llvm/bin/llvm-readelf"
 pending="libCajuAndroidHost.so"
 while [ -n "$pending" ]; do
@@ -49,4 +42,9 @@ while [ -n "$pending" ]; do
   pending="$next"
 done
 cp "$llvm/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so" "$out/"
+if [ "${CAJU_VALIDATION:-0}" = "1" ]; then
+  layer="$here/.build/validation-layer/arm64-v8a/libVkLayer_khronos_validation.so"
+  [ -f "$layer" ] || { echo "falta $layer: rode scripts/fetch-validation-layer.sh" >&2; exit 1; }
+  cp "$layer" "$out/"
+fi
 echo "ok: $out"

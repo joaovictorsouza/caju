@@ -33,8 +33,17 @@
         private(set) var submittedSerial: UInt64 = 0
         private(set) var completedSerial: UInt64 = 0
 
-        init(enableSurface: Bool) throws(CajuRHIError) {
+        /// Contagem de mensagens da camada de validação (erros, avisos), quando ela está ligada.
+        let validationCounts: UnsafeMutablePointer<(errors: Int, warnings: Int)>
+        let validationEnabled: Bool
+        private var messenger: VkDebugUtilsMessengerEXT?
+
+        init(enableSurface: Bool, enableValidation: Bool) throws(CajuRHIError) {
             surfaceEnabled = enableSurface
+            validationCounts = .allocate(capacity: 1)
+            validationCounts.initialize(to: (0, 0))
+            let validation = enableValidation && Self.hasInstanceLayer("VK_LAYER_KHRONOS_validation")
+            validationEnabled = validation
 
             // Instância.
             var application = VkApplicationInfo()
@@ -42,22 +51,29 @@
             application.pApplicationName = vkName("Caju")
             application.pEngineName = vkName("Caju")
             application.apiVersion = vulkan11
-            let instanceExtensions: [UnsafePointer<CChar>?] =
+            var instanceExtensions: [UnsafePointer<CChar>?] =
                 enableSurface ? [vkName("VK_KHR_surface"), vkName("VK_KHR_android_surface")] : []
+            if validation { instanceExtensions.append(vkName("VK_EXT_debug_utils")) }
+            let layers: [UnsafePointer<CChar>?] = validation ? [vkName("VK_LAYER_KHRONOS_validation")] : []
             var createdInstance: VkInstance?
             let instanceResult: VkResult = instanceExtensions.withUnsafeBufferPointer { extensions in
-                withUnsafePointer(to: &application) { application in
-                    var info = VkInstanceCreateInfo()
-                    info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO
-                    info.pApplicationInfo = application
-                    info.enabledExtensionCount = UInt32(extensions.count)
-                    info.ppEnabledExtensionNames = extensions.baseAddress
-                    return vkCreateInstance(&info, nil, &createdInstance)
+                layers.withUnsafeBufferPointer { layers in
+                    withUnsafePointer(to: &application) { application in
+                        var info = VkInstanceCreateInfo()
+                        info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO
+                        info.pApplicationInfo = application
+                        info.enabledExtensionCount = UInt32(extensions.count)
+                        info.ppEnabledExtensionNames = extensions.baseAddress
+                        info.enabledLayerCount = UInt32(layers.count)
+                        info.ppEnabledLayerNames = layers.baseAddress
+                        return vkCreateInstance(&info, nil, &createdInstance)
+                    }
                 }
             }
             try vkCheck(instanceResult)
             guard let instance = createdInstance else { throw .deviceLost }
             self.instance = instance
+            if validation { messenger = Self.makeMessenger(instance, counts: validationCounts) }
 
             // Dispositivo físico com fila gráfica.
             var count: UInt32 = 0
@@ -169,13 +185,82 @@
         }
 
         deinit {
+            defer { validationCounts.deallocate() }
             vkDeviceWaitIdle(device)
             for entry in inFlight { vkDestroyFence(device, entry.fence, nil) }
             for fence in freeFences { vkDestroyFence(device, fence, nil) }
             vmaDestroyAllocator(allocator)
             vkDestroyCommandPool(device, commandPool, nil)  // libera também os command buffers
             vkDestroyDevice(device, nil)
+            if let messenger, let destroy = vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT")
+            {
+                unsafeBitCast(destroy, to: PFN_vkDestroyDebugUtilsMessengerEXT.self)(instance, messenger, nil)
+            }
             vkDestroyInstance(instance, nil)
+        }
+
+        // MARK: Camada de validação (só depuração; ADR 0024)
+
+        private static func hasInstanceLayer(_ name: String) -> Bool {
+            var count: UInt32 = 0
+            guard vkEnumerateInstanceLayerProperties(&count, nil) == VK_SUCCESS, count > 0 else {
+                return false
+            }
+            var properties = [VkLayerProperties](repeating: VkLayerProperties(), count: Int(count))
+            guard vkEnumerateInstanceLayerProperties(&count, &properties) == VK_SUCCESS else { return false }
+            return properties.contains { property in
+                var layerName = property.layerName
+                return withUnsafePointer(to: &layerName) {
+                    $0.withMemoryRebound(to: CChar.self, capacity: Int(VK_MAX_EXTENSION_NAME_SIZE)) {
+                        String(cString: $0) == name
+                    }
+                }
+            }
+        }
+
+        /// Encaminha avisos e erros da camada ao logcat (tag `CajuVulkan`) e os conta.
+        private static func makeMessenger(
+            _ instance: VkInstance, counts: UnsafeMutablePointer<(errors: Int, warnings: Int)>
+        ) -> VkDebugUtilsMessengerEXT? {
+            guard let create = vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT") else {
+                return nil
+            }
+            var info = VkDebugUtilsMessengerCreateInfoEXT()
+            info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT
+            info.messageSeverity = VkDebugUtilsMessageSeverityFlagsEXT(
+                VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT.rawValue
+                    | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT.rawValue)
+            info.messageType = VkDebugUtilsMessageTypeFlagsEXT(
+                VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT.rawValue
+                    | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT.rawValue
+                    | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT.rawValue)
+            info.pfnUserCallback = { severity, _, data, user in
+                // A camada do Khronos sempre dá um id (`VUID-…`, `UNASSIGNED-…`, `SYNC-…`); o driver Adreno manda
+                // dicas próprias pelo mesmo canal, sem id (ex.: VKDBGUTILWARN003, multipass), marcadas como
+                // erro de validação. Só as do Khronos contam como erro; as do driver são avisos.
+                let fromKhronos = data?.pointee.pMessageIdName != nil
+                let isError =
+                    fromKhronos
+                    && severity.rawValue & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT.rawValue != 0
+                var warnings = 0
+                if let user {
+                    let counts = user.assumingMemoryBound(to: (errors: Int, warnings: Int).self)
+                    if isError { counts.pointee.errors += 1 } else { counts.pointee.warnings += 1 }
+                    warnings = counts.pointee.warnings
+                }
+                // Avisos do driver se repetem a cada quadro: só os primeiros vão ao logcat.
+                guard fromKhronos || warnings <= 5 else { return VkBool32(VK_FALSE) }
+                let message = data?.pointee.pMessage ?? vkName("?")
+                let tag = fromKhronos ? vkName("CajuVulkan") : vkName("CajuVulkanDriver")
+                _ = __android_log_write(
+                    Int32((isError ? ANDROID_LOG_ERROR : ANDROID_LOG_WARN).rawValue), tag, message)
+                return VkBool32(VK_FALSE)
+            }
+            info.pUserData = UnsafeMutableRawPointer(counts)
+            var messenger: VkDebugUtilsMessengerEXT?
+            let result = unsafeBitCast(create, to: PFN_vkCreateDebugUtilsMessengerEXT.self)(
+                instance, &info, nil, &messenger)
+            return result == VK_SUCCESS ? messenger : nil
         }
 
         // MARK: Capacidades
