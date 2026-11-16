@@ -116,8 +116,9 @@ let package = Package(
         // Camada 3
         module("CajuScene", ["CajuCore", "CajuMath"]),
         module("CajuInput", ["CajuCore", "CajuMath", "CajuPlatform"]),
-        module("CajuRender", ["CajuCore", "CajuMath", "CajuRHI", "CajuScene"]),
-        module("CajuAssets", ["CajuCore", "CajuAssetsCore", "CajuRHI"]),
+        module("CajuRender", ["CajuCore", "CajuMath", "CajuRHI", "CajuScene", "CajuAssets"]),
+        module("CajuAssets", ["CajuCore", "CajuAssetsCore"]),
+        module("CajuToolsCore", []),
         module("CajuAnim", ["CajuCore", "CajuMath", "CajuScene"]),
         module("CajuAudio", ["CajuCore", "CajuMath", "CMiniaudio"]),
         module("CajuUI", ["CajuCore", "CajuUILayout", "CajuText", "CajuRHI", "CajuInput"]),
@@ -150,6 +151,7 @@ let package = Package(
         // Ferramentas
         .executableTarget(
             name: "CajuTools",
+            dependencies: ["CajuToolsCore"],
             exclude: ["README.md"],
             swiftSettings: common
         ),
@@ -163,6 +165,16 @@ let package = Package(
         .testTarget(
             name: "CajuMathTests",
             dependencies: ["CajuMath", "CajuTesting"],
+            swiftSettings: common
+        ),
+        .testTarget(
+            name: "CajuAssetsTests",
+            dependencies: ["CajuAssets", "CajuAssetsCore", "CajuCore", "CajuTesting"],
+            swiftSettings: common
+        ),
+        .testTarget(
+            name: "CajuToolsTests",
+            dependencies: ["CajuToolsCore"],
             swiftSettings: common
         ),
         .testTarget(
