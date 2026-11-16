@@ -10,9 +10,10 @@ case "$config" in release) dir=Release ;; *) dir=Debug ;; esac
 triple=aarch64-unknown-linux-android29
 remote=/data/local/tmp/caju-conformance
 
-# Swift SDK for Android: ~/Library/org.swift.swiftpm (macOS) ou ~/.swiftpm (Linux, CI).
-sdk_root="$(ls -d "$HOME"/Library/org.swift.swiftpm/swift-sdks/*android*.artifactbundle/swift-android \
-  "$HOME"/.swiftpm/swift-sdks/*android*.artifactbundle/swift-android 2>/dev/null | head -n 1)"
+# Swift SDK for Android: ~/Library/org.swift.swiftpm (macOS), ~/.swiftpm ou ~/.config/swiftpm (Linux, CI).
+sdk_root="$(find "$HOME/Library/org.swift.swiftpm" "$HOME/.swiftpm" "$HOME/.config/swiftpm" -maxdepth 4 -type d \
+  -path '*android*.artifactbundle/swift-android' 2>/dev/null | head -n 1)"
+[ -n "$sdk_root" ] || { echo "Swift SDK for Android não encontrado (swift sdk install ...)" >&2; exit 1; }
 runtime="$sdk_root/swift-resources/usr/lib/swift-aarch64/android"
 llvm="$(ls -d "$ndk"/toolchains/llvm/prebuilt/*)"
 stage="$here/.build/conformance-stage"

@@ -92,7 +92,10 @@ jobs:
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;$NDK_VERSION" > /dev/null
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
-          ANDROID_NDK_HOME="$ANDROID_HOME/ndk/$NDK_VERSION" sh "$(ls -d "$HOME"/.swiftpm/swift-sdks/*android*/swift-android/scripts/setup-android-sdk.sh)"
+          swift sdk list
+          setup="$(find "$HOME/.swiftpm" "$HOME/.config/swiftpm" -maxdepth 6 -name setup-android-sdk.sh -path '*swift-android*' 2>/dev/null | head -n 1)"
+          echo "setup: $setup"
+          ANDROID_NDK_HOME="$ANDROID_HOME/ndk/$NDK_VERSION" sh "$setup"
       - name: APK (assembleDebug)
         run: cd Hosts/Android && ./gradlew --no-daemon :app:assembleDebug
       - uses: actions/upload-artifact@v4
