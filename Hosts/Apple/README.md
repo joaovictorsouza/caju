@@ -21,4 +21,4 @@ xcodebuild -project CajuHost.xcodeproj -scheme CajuHost-iOS -destination 'platfo
 ```
 Depois `xcrun simctl install`/`launch dev.caju.host`.
 
-**Estado:** verificado no simulador iPhone 17 Pro (cubo e texto "GIRAR CUBO" renderizam). **Não verificado:** toque no botão e execução em iPhone 16 Pro (aparelho offline na sessão) `(?)`.
+**Estado:** verificado no simulador iPhone 17 Pro (cubo e texto "GIRAR CUBO" renderizam). **Verificado no iPhone 16 Pro (S-0, `docs/evidencias/s0-ios/`):** toque, 50 ciclos de superfície, soak de 5 min e background/resume reais. Argumentos de lançamento: `-caju-gate` (mede e grava `Documents/gate.log`) e `-caju-soak-frames N`. No iOS o toque usa o espaço de coordenadas global (o local começa na área segura).
