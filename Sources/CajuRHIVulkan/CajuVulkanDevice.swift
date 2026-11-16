@@ -57,6 +57,12 @@
         var samplers = CajuHandlePool<CajuSamplerTag, VkSampler>()
         var shaders = CajuHandlePool<CajuShaderTag, VkShaderModule>()
         private var transients: [Int: [(descriptor: CajuTextureDescriptor, handle: CajuTextureHandle)]] = [:]
+        /// Handles vivos por tipo: `CajuHandlePool` não é iterável, e o `deinit` precisa liberar tudo antes de
+        /// destruir o alocador (o VMA aborta se sobrar alocação). Só muda na criação/destruição.
+        private var liveBuffers: [UInt32: CajuBufferHandle] = [:]
+        private var liveTextures: [UInt32: CajuTextureHandle] = [:]
+        private var liveSamplers: [UInt32: CajuSamplerHandle] = [:]
+        private var liveShaders: [UInt32: CajuShaderHandle] = [:]
         private var garbage: [(serial: UInt64, item: VulkanGarbage)] = []
 
         /// Cria o dispositivo. `enableSurface` liga as extensões de superfície (apresentação em janela);
@@ -69,6 +75,10 @@
 
         deinit {
             try? context.waitIdle()
+            for handle in liveTextures.values { destroy(handle) }
+            for handle in liveBuffers.values { destroy(handle) }
+            for handle in liveSamplers.values { destroy(handle) }
+            for handle in liveShaders.values { destroy(handle) }
             collectGarbage(force: true)
         }
 
@@ -160,12 +170,16 @@
             try vkCheck(
                 vmaCreateBuffer(context.allocator, &bufferInfo, &allocationInfo, &buffer, &allocation, &info))
             guard let buffer, let allocation else { throw .outOfMemory }
-            return buffers.insert(
+            let handle = buffers.insert(
                 VulkanBuffer(buffer: buffer, allocation: allocation, mapped: info.pMappedData, descriptor: d))
+            liveBuffers[handle.index] = handle
+            return handle
         }
 
         public func createTexture(_ d: CajuTextureDescriptor) throws(CajuRHIError) -> CajuTextureHandle {
-            textures.insert(try makeTexture(d))
+            let handle = textures.insert(try makeTexture(d))
+            liveTextures[handle.index] = handle
+            return handle
         }
 
         private func makeTexture(_ d: CajuTextureDescriptor) throws(CajuRHIError) -> VulkanTexture {
@@ -306,7 +320,9 @@
             var sampler: VkSampler?
             try vkCheck(vkCreateSampler(context.device, &info, nil, &sampler))
             guard let sampler else { throw .outOfMemory }
-            return samplers.insert(sampler)
+            let handle = samplers.insert(sampler)
+            liveSamplers[handle.index] = handle
+            return handle
         }
 
         public func createShaderModule(_ d: CajuShaderModuleDescriptor) throws(CajuRHIError)
@@ -326,7 +342,9 @@
             }
             try vkCheck(result)
             guard let module else { throw .outOfMemory }
-            return shaders.insert(module)
+            let handle = shaders.insert(module)
+            liveShaders[handle.index] = handle
+            return handle
         }
 
         public func createRenderPipeline(_ d: CajuRenderPipelineDescriptor) throws(CajuRHIError)
@@ -350,20 +368,28 @@
         // MARK: Destruição (adiada até a GPU terminar)
 
         public func destroy(_ buffer: CajuBufferHandle) {
-            if let record = buffers.remove(buffer) { retire(.buffer(record.buffer, record.allocation)) }
+            guard let record = buffers.remove(buffer) else { return }
+            liveBuffers[buffer.index] = nil
+            retire(.buffer(record.buffer, record.allocation))
         }
 
         public func destroy(_ texture: CajuTextureHandle) {
-            guard let record = textures.remove(texture), record.ownsImage else { return }
+            guard let record = textures.remove(texture) else { return }
+            liveTextures[texture.index] = nil
+            guard record.ownsImage else { return }
             retire(.image(record.image, record.view, record.allocation))
         }
 
         public func destroy(_ sampler: CajuSamplerHandle) {
-            if let record = samplers.remove(sampler) { retire(.sampler(record)) }
+            guard let record = samplers.remove(sampler) else { return }
+            liveSamplers[sampler.index] = nil
+            retire(.sampler(record))
         }
 
         public func destroy(_ shader: CajuShaderHandle) {
-            if let record = shaders.remove(shader) { retire(.shader(record)) }
+            guard let record = shaders.remove(shader) else { return }
+            liveShaders[shader.index] = nil
+            retire(.shader(record))
         }
 
         public func destroy(_ pipeline: CajuRenderPipelineHandle) {}
