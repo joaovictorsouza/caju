@@ -11,7 +11,8 @@
         }
 
         public func submit(_ commandBuffer: CajuVulkanCommandBuffer) throws(CajuRHIError) {
-            try device.context.submit(commandBuffer.handle)
+            let serial = try device.context.submit(commandBuffer.handle)
+            device.uniformRing.mark(serial: serial)
             device.collectGarbage()
         }
 
@@ -32,7 +33,7 @@
         public mutating func withRenderPass(
             _ descriptor: CajuRenderPassDescriptor, _ body: (inout CajuVulkanRenderEncoder) -> Void
         ) throws(CajuRHIError) {
-            throw .backend(code: cajuVulkanNotImplementedCode)  // fatia D da V-1
+            try device.recordRenderPass(descriptor, into: handle, body)
         }
 
         public mutating func withComputePass(label: String, _ body: (inout CajuVulkanComputeEncoder) -> Void)
@@ -72,26 +73,6 @@
                 VkPipelineStageFlags(destination.rawValue), 0, 1,
                 &barrier, 0, nil, 0, nil)
         }
-    }
-
-    /// Encoder de render (fatia D da V-1): hoje só existe para o contrato compilar.
-    public struct CajuVulkanRenderEncoder: CajuRenderEncoder {
-        public mutating func setPipeline(_ pipeline: CajuRenderPipelineHandle) {}
-        public mutating func setViewport(_ viewport: CajuViewport) {}
-        public mutating func setScissor(_ rect: CajuScissorRect) {}
-        public mutating func setVertexBuffer(_ buffer: CajuBufferHandle, offset: Int, index: Int) {}
-        public mutating func setBuffer(
-            _ buffer: CajuBufferHandle, offset: Int, index: Int, stage: CajuShaderStage
-        ) {}
-        public mutating func setBytes(_ bytes: UnsafeRawBufferPointer, index: Int, stage: CajuShaderStage) {}
-        public mutating func setTexture(_ texture: CajuTextureHandle, index: Int, stage: CajuShaderStage) {}
-        public mutating func setSampler(_ sampler: CajuSamplerHandle, index: Int, stage: CajuShaderStage) {}
-        public mutating func draw(vertexCount: Int, instanceCount: Int, firstVertex: Int, firstInstance: Int)
-        {}
-        public mutating func drawIndexed(
-            indexCount: Int, instanceCount: Int, indexBuffer: CajuBufferHandle, indexType: CajuIndexType,
-            indexOffset: Int, baseVertex: Int, firstInstance: Int
-        ) {}
     }
 
     /// Compute não faz parte dos gates da Onda 1 (`capabilities.supportsCompute == false`).
@@ -169,6 +150,7 @@
                 imageExtent: VkExtent3D(width: UInt32(width), height: UInt32(height), depth: 1))
             vkCmdCopyBufferToImage(
                 commandBuffer, b.buffer, t.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region)
+            if let resting = t.restingLayout { device.transition(commandBuffer, t, to: resting) }
         }
 
         public mutating func generateMipmaps(for texture: CajuTextureHandle) {
@@ -235,6 +217,7 @@
                     level: level, from: VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                     to: VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
             }
+            if let resting = t.restingLayout { device.transition(commandBuffer, t, to: resting) }
         }
     }
 #endif
