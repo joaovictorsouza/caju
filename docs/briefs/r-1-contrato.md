@@ -72,27 +72,28 @@ Draw list = vetor reservado de `CajuDrawItem` (valor, sem referência), ordenado
 | Entrega | `CajuRenderWorld`, extração cheia, `CajuCamera`, materiais unlit/PBR, luz direcional, frame graph `main` com MSAA, cull por frustum, draw list ordenada, cache de PSO em memória, golden Metal (cubo unlit, esfera PBR) | passe `shadow` (mapa único, PCF simples `(?)`), instancing automático, skinning na GPU (paleta de juntas), cache de PSO persistido |
 | Exige de **A-1** | `CajuAssetHandle` + `CajuAssetServing` (`state`, `value`, `revision`) do PR #26, assets de malha, material e textura com dados de CPU | o mesmo, mais `inverseBindMatrices` e `jointCount` no asset de malha skinned |
 | Exige de **AN-1** | nada | `CajuSkinPose` + `CajuPoseArena`, pose em espaço do modelo sem `inverseBind` (§7.2) |
-| Depende de | CajuScene e CajuRHI (existentes), contrato A-1 (#26) e PR de `Package.swift` com `CajuRender` → `CajuAssets` | R-1a, contrato A-1, contrato AN-1 (ADR 0027) |
+| Depende de | CajuScene e CajuRHI (existentes), contrato A-1 (#26) e mudança de `Package.swift` no PR único final (`CajuRender` → `CajuAssets`, remove `CajuAssets` → `CajuRHI`) | R-1a, contrato A-1, contrato AN-1 (ADR 0027) |
 
 R-1a **não bloqueia** em AN-1; em A-1 depende só do contrato (`CajuAssetServing`, handles, `revision`): testes usam servidor falso e assets sintéticos.
 
 ### 7.1 R-1 ↔ A-1: ponte entre assets e render (decisão, ver ADR 0023)
-**Decisão:** `CajuRender` passa a **depender de `CajuAssets`** (mesma camada, como `CajuUI` → `CajuInput`) e é dono da **residência na GPU**. Não há "cola" de aplicação.
-- O componente de malha guarda `CajuAssetHandle<…>` (8 bytes, `BitwiseCopyable`, ADR 0021). A extração copia o handle; o render mantém um **cache de residência** em colunas, indexado por `handle.index`, com `generation` e a `revision` do asset (que o A-1 já incrementa "para recriar buffer de GPU após hot reload").
-- Na preparação do quadro: `revision` igual → usa o recurso; diferente ou ausente e `state.hasValue` → sobe o dado de CPU (`value(of:)`, saída dos parsers de `CajuAssetsCore`) sob `CajuUploadBudget` (o que não couber espera o quadro seguinte); `.queued`/`.loading`/`.failed` → desenha o **substituto** (malha/material padrão), sem bloquear nem lançar.
-- Descarte: handle `.stale` ou evento `unloaded` → o render agenda a destruição do recurso com atraso de N quadros em voo (N = quadros em voo do RHI `(?)`).
-- O render consulta só o protocolo `CajuAssetServing` (genérico no servidor), então os testes headless usam um servidor falso e `CajuNullDevice`.
+**Decisão:** `CajuRender` passa a **depender de `CajuAssets`** (mesma camada, como `CajuUI` → `CajuInput`) e é dono da **residência na GPU**. `CajuAssets` **nunca** importa `CajuRHI` nem `CajuRender`. Não há "cola" de aplicação.
+- O componente de malha guarda `CajuAssetHandle<…>` (8 bytes, `BitwiseCopyable`, ADR 0021).
+- **Extração (thread de jogo):** é o único ponto que consulta o `CajuAssetServing` (não `Sendable`). Copia handle e o **valor de CPU `Sendable`** (saída dos parsers de `CajuAssetsCore`) para o mundo de render; o desenho nunca toca o servidor.
+- **Invalidação por eventos:** uma vez por quadro o render consome `drainEvents` (loaded/reloaded/unloaded/failed) e cria, recria ou descarta recursos. Não compara `revision` por item por quadro (ela serve ao primeiro encontro com o handle e a testes).
+- Cache de residência em colunas indexado por `handle.index` (+ `generation`); upload sob `CajuUploadBudget` (o que não couber espera o quadro seguinte); `.queued`/`.loading`/`.failed` → **substituto** (malha/material padrão), sem bloquear nem lançar; descarte com atraso de N quadros em voo `(?)`.
+- Testes headless: `CajuAssetServing` falso + `CajuNullDevice`.
 
 **Por que (comparação):**
 
 | Opção | Como outras engines fazem | Veredito |
 |---|---|---|
-| **Render depende de assets e é dono da residência (escolhida)** | Bevy: `RenderAssets<GpuMesh>` preparado no mundo de render a partir de `AssetEvent`; Godot e Filament: o servidor de render é dono dos recursos de GPU e o jogo passa ids | Sem cola, sem tradução por quadro; A-1 fica sem GPU (CPU puro, testável em Linux); upload sob orçamento e hot reload por `revision` |
-| Cola da aplicação + protocolo de residência (rascunho inicial) | Nenhuma engine mainstream precisa; vira código de integração que todo jogo reescreve | Rejeitada: peça extra, ponto de falha, ninguém dono |
-| A-1 sobe a GPU e entrega `CajuTextureHandle`/buffers | Unity: `Mesh` guarda os buffers | Rejeitada: acopla A-1 ao RHI e ao orçamento por quadro; o upload fica fora do controle do frame graph |
-| Módulo neutro novo abaixo dos dois | — | Rejeitada: exige `Package.swift` e tipos sem dono claro |
+| **Render depende de assets e é dono da residência (escolhida)** | Só o **Bevy** faz exatamente isso (`RenderAssets` alimentado por eventos de asset). Godot: o recurso chama o `RenderingServer` por conta própria. Filament: módulo ponte à parte (`gltfio`) | Sem cola; o argumento é manter o A-1 só em CPU e testável em Linux, com upload sob o orçamento do frame graph |
+| Cola da aplicação + protocolo de residência (rascunho inicial) | Vira código de integração que todo jogo reescreve | Rejeitada (fica como plano B) |
+| A-1 sobe a GPU e entrega buffers | Unity: `Mesh` guarda os buffers | Rejeitada: acopla A-1 ao RHI e tira o upload do orçamento do frame graph |
+| Módulo ponte novo (estilo `gltfio`) | Filament | Rejeitada agora: exige alvo novo em `Package.swift` sem ganho no vertical slice |
 
-**Custo aceito:** uma linha de dependência em `Package.swift` (`CajuRender` → `CajuAssets`) em **PR dedicado e curto**, só depois do aceite do contrato A-1 (PR #26). Até lá R-1a testa com o servidor falso do protocolo. Se o dono recusar a dependência, o plano B é o protocolo de residência do rascunho anterior (só os tipos de valor deste PR sobrevivem).
+**Mudanças de `Package.swift` (entra no PR único final da Onda 1, `integracao/onda-1`, por decisão do dono em 2026-11-16; sem PR de pacote separado):** adicionar `CajuRender` → `CajuAssets` e **remover `CajuAssets` → `CajuRHI`** (nenhum arquivo de `CajuAssets` usa o RHI). Até lá, R-1a testa com o servidor falso. Plano B: protocolo de residência implementado pela aplicação (só os tipos de valor deste PR sobrevivem).
 
 ### 7.2 R-1b ↔ AN-1: pose de skinning (decisão, ver ADR 0023)
 **Decisão:** o AN-1 entrega **pose em espaço do modelo, sem `inverseBind`**; o R-1b multiplica pelo `inverseBind` da malha ao copiar para o buffer do quadro. Componentes em `CajuScene`:
@@ -114,9 +115,9 @@ R-1a **não bloqueia** em AN-1; em A-1 depende só do contrato (`CajuAssetServin
 ## 10. Riscos, kill-criteria e perguntas abertas
 - **Sem Swift na nuvem:** tipos e testes deste PR só são verificados pelo CI; números `(?)`.
 - **Extração cheia estoura o orçamento** (> 1 ms para 1 000 entidades `(?)`): passar para extração diferencial (ADR de revisão), sem mudar os tipos públicos.
-- **`Package.swift` trancado:** a decisão do §7.1 exige uma linha (`CajuRender` → `CajuAssets`) em PR dedicado, depois do aceite do contrato A-1; sem ela vale o plano B do §7.1.
+- **`Package.swift` trancado:** a decisão do §7.1 exige uma linha nova (`CajuRender` → `CajuAssets`) e uma remoção (`CajuAssets` → `CajuRHI`) no PR único final da Onda 1, depois do aceite do contrato A-1; sem ela vale o plano B do §7.1.
 - **Decisões do dono (2026-11-15):** (1)/(2) ponte A-1 ↔ R-1 e lugar da pose: o dono pediu estudo e decisão estratégica, registrada em §7.1/§7.2 e no ADR 0023; (3) uma luz direcional basta para o vertical slice (sim); ID 8 livre (sim); prefixo `Caju*` mantido na API de render por consistência com o resto da engine (o dono disse que não precisa manter em tudo; a UI decide o dela no ADR 0026).
-- **Aberto:** PR de `Package.swift` (`CajuRender` → `CajuAssets`) e PR de contrato em `CajuScene` (`CajuSkinPose`, `CajuPoseArena`); ambos depois do aceite deste PR.
+- **Aberto (PR único final):** mudança de `Package.swift` (`CajuRender` → `CajuAssets` e remoção de `CajuAssets` → `CajuRHI`) e contrato em `CajuScene` (`CajuSkinPose`, `CajuPoseArena`); ambos depois do aceite deste PR.
 
 ## 11. Documentos que este PR atualiza
 ADR 0023 (proposto) + `docs/adr/README.md`; plano (§8 Onda 1); `docs/standards/performance.md` (metas de R-1 `(?)`) e `testes.md` (goldens de cena); `Sources/CajuRender/README.md` e DocC.

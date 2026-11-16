@@ -9,7 +9,7 @@ public enum CajuRenderMeshTag: Sendable {}
 public enum CajuRenderMaterialTag: Sendable {}
 
 /// Malha residente na GPU, conhecida pelo mundo de render: posição no cache de residência de `CajuRender`.
-/// O render cria o cache a partir do `CajuAssetHandle` da malha (A-1) e o sobe na GPU sob o orçamento
+/// O render cria o cache a partir do valor de CPU extraído do asset (A-1) e o sobe na GPU sob o orçamento
 /// de upload (ver `docs/briefs/r-1-contrato.md` §7.1 e ADR 0023); o jogo nunca cria este id à mão.
 public typealias CajuRenderMeshID = CajuHandle<CajuRenderMeshTag>
 /// Material residente (parâmetros + pipeline) conhecido pelo mundo de render.

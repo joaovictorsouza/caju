@@ -10,7 +10,7 @@ Renderização: mundo de render separado, extração a partir do ECS, *frame gra
 1. **Extração:** no fim do quadro, copia do ECS (`CajuGlobalTransform` + `CajuRenderMesh`) para o mundo de render; o desenho nunca lê o ECS.
 2. **Draw list:** vetor de `CajuDrawItem` ordenado por `CajuDrawKey` (fila | pipeline | material | profundidade); opacos frente-para-trás, `blend` trás-para-frente.
 3. **Frame graph de cena:** `shadow` (R-1b) → `main` (forward + MSAA transitório) → UI → *backbuffer*, sobre o `CajuFrameGraphBuilder` do RHI.
-4. **A-1:** `CajuRender` (depois de PR de pacote) depende de `CajuAssets` e é dono da residência na GPU: cache por `CajuAssetHandle` + `revision`, upload sob orçamento, substituto enquanto o asset carrega.
+4. **A-1:** `CajuRender` (depois de PR de pacote) depende de `CajuAssets` (que nunca importa RHI nem Render) e é dono da residência na GPU: a extração consulta o servidor na thread de jogo e copia o valor de CPU; eventos de asset (`drainEvents`) criam e descartam recursos; upload sob orçamento; substituto enquanto o asset carrega.
 5. **AN-1:** R-1b recebe `CajuSkinPose` (referência a uma pose em espaço do modelo, em `CajuScene`) e aplica o `inverseBind` da malha.
 
 ## Divisão
