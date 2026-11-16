@@ -1,0 +1,12 @@
+dispositivo: Adreno (TM) 730 (Vulkan)
+memoryless=true amostras=7 astc=true maxTex=16384
+PASSOU textureUploadRoundTrip
+PASSOU destroyedHandlesAreRejected
+FALHOU singleSampleTriangleGolden: erro inesperado: backend(code: -1000000)
+FALHOU msaaResolveGolden: erro inesperado: backend(code: -1000000)
+FALHOU cullAndWindingFollowYUpNDC: erro inesperado: backend(code: -1000000)
+FALHOU renderPassValidationMatchesNull: erros [Optional(CajuRHI.CajuRHIError.backend(code: -1000000)), Optional(CajuRHI.CajuRHIError.backend(code: -1000000)), Optional(CajuRHI.CajuRHIError.backend(code: -1000000)), Optional(CajuRHI.CajuRHIError.backend(code: -1000000))] ≠ null [Optional(CajuRHI.CajuRHIError.invalidUsage(CajuRHI.CajuRHIUsageIssue.memorylessMustNotPersist)), Optional(CajuRHI.CajuRHIError.invalidUsage(CajuRHI.CajuRHIUsageIssue.memorylessMustNotPersist)), Optional(CajuRHI.CajuRHIError.invalidUsage(CajuRHI.CajuRHIUsageIssue.resolveTargetNotSingleSample)), nil]
+FALHOU renderPassValidationMatchesNull: caso 0: Optional(Optional(CajuRHI.CajuRHIError.backend(code: -1000000)))
+FALHOU renderPassValidationMatchesNull: caso 3 deveria passar: Optional(Optional(CajuRHI.CajuRHIError.backend(code: -1000000)))
+recursos vivos=8 destruição pendente=1 bytes VMA=134217728
+resultado: 2 passaram, 6 falhas
