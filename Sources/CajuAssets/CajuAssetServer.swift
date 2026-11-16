@@ -63,8 +63,12 @@ public final class CajuAssetServer: CajuAssetServing {
     /// Registra (ou substitui) o decodificador para o tipo `L.Asset`.
     public func registerLoader<L: CajuAssetLoader>(_ loader: L) {
         let b = bucket(for: L.Asset.self)
-        b.decode = { bytes, path, limits throws(CajuAssetError) in
-            try await loader.load(bytes, path: path, limits: limits)
+        b.decode = { bytes, path, limits in
+            do throws(CajuAssetError) {
+                return .success(try await loader.load(bytes, path: path, limits: limits))
+            } catch {
+                return .failure(error)
+            }
         }
     }
 
@@ -76,7 +80,13 @@ public final class CajuAssetServer: CajuAssetServing {
             A
     ) {
         let b = bucket(for: type)
-        b.decode = decode
+        b.decode = { bytes, path, limits in
+            do throws(CajuAssetError) {
+                return .success(try await decode(bytes, path, limits))
+            } catch {
+                return .failure(error)
+            }
+        }
     }
 
     /// Pede o asset. Deduplica por `(A.self, path)`: o mesmo par devolve o mesmo handle e soma uma posse.
@@ -291,7 +301,7 @@ public final class CajuAssetServer: CajuAssetServing {
     /// Lê e decodifica fora do quadro. Devolve `nil` se a tarefa foi cancelada (nada a publicar).
     private static func run<A: CajuAsset>(
         source: any CajuAssetSource,
-        decode: @Sendable ([UInt8], CajuAssetPath, AssetLimits) async throws(CajuAssetError) -> A,
+        decode: @Sendable ([UInt8], CajuAssetPath, AssetLimits) async -> Result<A, CajuAssetError>,
         path: CajuAssetPath,
         limits: AssetLimits
     ) async -> Result<any CajuAsset, CajuAssetError>? {
@@ -299,7 +309,7 @@ public final class CajuAssetServer: CajuAssetServing {
         do throws(CajuAssetError) {
             let bytes = try await source.read(path)
             if Task.isCancelled { return nil }
-            outcome = .success(try await decode(bytes, path, limits))
+            outcome = await decode(bytes, path, limits)
         } catch {
             outcome = .failure(error)
         }
@@ -339,7 +349,7 @@ private final class TypedAssetBucket<A: CajuAsset>: AssetBucketBase {
     }
 
     var store = CajuAssetStore<A>()
-    var decode: (@Sendable ([UInt8], CajuAssetPath, AssetLimits) async throws(CajuAssetError) -> A)?
+    var decode: (@Sendable ([UInt8], CajuAssetPath, AssetLimits) async -> Result<A, CajuAssetError>)?
     private var meta: [SlotMeta] = []
     private var pathToHandle: [CajuAssetPath: CajuAssetHandle<A>] = [:]
     private var pendingStartIndices: [UInt32] = []
