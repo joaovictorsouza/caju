@@ -273,23 +273,9 @@ public final class CajuAssetServer: CajuAssetServing {
         let typeID = ObjectIdentifier(A.self)
 
         let task = Task.detached(priority: .utility) {
-            let result: Result<any CajuAsset, CajuAssetError>
-            do {
-                let asset = try await Self.readAndDecode(
-                    source: source,
-                    decode: decode,
-                    path: path,
-                    limits: limits
-                )
-                if Task.isCancelled { return }
-                result = .success(asset)
-            } catch let error as CajuAssetError {
-                if Task.isCancelled { return }
-                result = .failure(error)
-            } catch {
-                if Task.isCancelled { return }
-                result = .failure(.io(path: path.rawValue, reason: String(describing: error)))
-            }
+            let result = await Self.run(source: source, decode: decode, path: path, limits: limits)
+            // `nil`: cancelada; nada a publicar.
+            guard let result else { return }
             mailbox.postCompletion(
                 CajuAssetCompletion(
                     typeID: typeID,
@@ -302,15 +288,26 @@ public final class CajuAssetServer: CajuAssetServing {
         bucket.setActiveTask(task, for: handle)
     }
 
-    private static func readAndDecode<A: CajuAsset>(
+    /// Lê e decodifica fora do quadro. Devolve `nil` se a tarefa foi cancelada (nada a publicar).
+    private static func run<A: CajuAsset>(
         source: any CajuAssetSource,
         decode: @Sendable ([UInt8], CajuAssetPath, AssetLimits) async throws(CajuAssetError) -> A,
         path: CajuAssetPath,
         limits: AssetLimits
-    ) async throws(CajuAssetError) -> A {
-        let bytes = try await source.read(path)
-        if Task.isCancelled { throw .cancelled }
-        return try await decode(bytes, path, limits)
+    ) async -> Result<any CajuAsset, CajuAssetError>? {
+        let outcome: Result<A, CajuAssetError>
+        do throws(CajuAssetError) {
+            let bytes = try await source.read(path)
+            if Task.isCancelled { return nil }
+            outcome = .success(try await decode(bytes, path, limits))
+        } catch {
+            outcome = .failure(error)
+        }
+        if Task.isCancelled { return nil }
+        switch outcome {
+        case .success(let asset): return .success(asset)
+        case .failure(let error): return .failure(error)
+        }
     }
 }
 
