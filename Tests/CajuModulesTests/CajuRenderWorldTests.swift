@@ -81,6 +81,20 @@ struct CajuRenderWorldTests {
         #expect(render.light?.direction == CajuVec3(1, 0, 0))
     }
 
+    @Test func extractionCopiesSkinPose() throws {
+        let world = CajuWorld()
+        let mesh = assets.put(CajuMeshAsset.cube())
+        let material = assets.put(CajuMaterialAsset())
+        let pose = CajuSkinPose(poseSlot: 3, jointCount: 2, version: 7)
+        _ = try world.spawn(CajuGlobalTransform(.identity), CajuRenderMesh(mesh: mesh, material: material))
+        _ = try world.spawn(
+            CajuGlobalTransform(.identity), CajuRenderMesh(mesh: mesh, material: material), pose)
+        let render = CajuRenderWorld(capacity: 4)
+        try render.extract(from: world, assets: assets)
+        #expect(render.count == 2)
+        #expect(render.poses.filter(\.isValid) == [pose])
+    }
+
     @Test func extractionReportsCapacityOverflow() throws {
         let world = CajuWorld()
         let mesh = assets.put(CajuMeshAsset.cube())

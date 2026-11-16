@@ -30,5 +30,17 @@
             #expect(problems.isEmpty, "\(problems)")
             #expect(device.transientTextureCount == 2)
         }
+
+        /// *Skinning* rígido posado pela arena = a mesma malha sem pele transformada (R-1b).
+        @Test func skinningMatchesRigidTransform() throws {
+            metalAllocationLock.lock()
+            defer { metalAllocationLock.unlock() }
+            let device = try CajuMetalDevice.makeSystemDefault()
+            let problems = try CajuSceneGolden.checkSkinningEquivalence(device: device) {
+                texture throws(CajuRHIError) in
+                try device.readTexture(texture)
+            }
+            #expect(problems.isEmpty, "\(problems)")
+        }
     }
 #endif

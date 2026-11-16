@@ -14,6 +14,7 @@ layout(set = 0, binding = 0) uniform FrameUniforms {
 struct Instance {
     mat4 model;
     mat4 normalMatrix;
+    uvec4 skin;  // x = início da paleta de juntas no buffer do quadro (só malhas com skinning)
 };
 layout(std430, set = 0, binding = 1) readonly buffer Instances {
     Instance instances[];

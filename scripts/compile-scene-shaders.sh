@@ -15,6 +15,8 @@ words() { glslc -O -mfmt=num -o - "$1" | tr -d '\n' | sed 's/,$//; s/,/, /g'; }
   echo "    static let vertex: [UInt32] = [$(words "$src/scene.vert")]"
   echo ""
   echo "    static let fragment: [UInt32] = [$(words "$src/scene.frag")]"
+  echo ""
+  echo "    static let skinnedVertex: [UInt32] = [$(words "$src/scene_skinned.vert")]"
   echo "}"
 } > "$out"
 swift format format -i "$out"

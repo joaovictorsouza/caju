@@ -5,7 +5,8 @@
 /// vértice `buffer(1)` = instâncias (`setBuffer(index: 1, stage: .vertex)`; `instance_id` inclui a base),
 /// fragmento `buffer(0)` = `MaterialUniforms`, `texture(0)`/`sampler(0)` = cor base, `texture(1)`/`sampler(1)` =
 /// mapa de sombra. O fluxo de vértices é o
-/// `setVertexBuffer(index: 0)`, que o backend Metal põe na posição 30.
+/// `setVertexBuffer(index: 0)`, que o backend Metal põe na posição 30. Skinning (R-1b): segundo fluxo
+/// `setVertexBuffer(index: 1)` (juntas e pesos) e paleta em `setBuffer(index: 2, stage: .vertex)`.
 enum CajuSceneShaderMSL {
     static let source = """
         #include <metal_stdlib>
@@ -24,6 +25,15 @@ enum CajuSceneShaderMSL {
         struct Instance {
             float4x4 model;
             float4x4 normalMatrix;
+            uint4 skin;
+        };
+
+        struct SkinnedVertexIn {
+            float3 position [[attribute(0)]];
+            float3 normal [[attribute(1)]];
+            float2 uv [[attribute(2)]];
+            float4 joints [[attribute(3)]];
+            float4 weights [[attribute(4)]];
         };
 
         struct MaterialUniforms {
@@ -54,6 +64,26 @@ enum CajuSceneShaderMSL {
             float4 world = instance.model * float4(in.position, 1.0);
             out.worldPosition = world.xyz;
             out.normal = (instance.normalMatrix * float4(in.normal, 0.0)).xyz;
+            out.uv = in.uv;
+            out.position = frame.viewProjection * world;
+            return out;
+        }
+
+        vertex VertexOut caju_scene_skinned_vs(
+            SkinnedVertexIn in [[stage_in]], constant FrameUniforms& frame [[buffer(0)]],
+            const device Instance* instances [[buffer(1)]], const device float4x4* joints [[buffer(2)]],
+            uint instanceID [[instance_id]]
+        ) {
+            VertexOut out;
+            Instance instance = instances[instanceID];
+            uint base = instance.skin.x;
+            float4x4 skin = in.weights.x * joints[base + uint(in.joints.x)]
+                + in.weights.y * joints[base + uint(in.joints.y)]
+                + in.weights.z * joints[base + uint(in.joints.z)]
+                + in.weights.w * joints[base + uint(in.joints.w)];
+            float4 world = instance.model * (skin * float4(in.position, 1.0));
+            out.worldPosition = world.xyz;
+            out.normal = (instance.normalMatrix * (skin * float4(in.normal, 0.0))).xyz;
             out.uv = in.uv;
             out.position = frame.viewProjection * world;
             return out;

@@ -1,6 +1,7 @@
 import CajuAssets
 import CajuMath
 import CajuRHI
+import CajuScene
 
 /// Renderer de cena da R-1a (ADR 0023): residência na GPU dos assets de render, cache de PSO em memória,
 /// draw list e passe `main` forward com MSAA transitório resolvido no alvo.
@@ -19,6 +20,8 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
 
     private let vertex: CajuShaderFunction
     private let fragment: CajuShaderFunction
+    /// Variante com *skinning* do vértice (R-1b): segundo fluxo (juntas/pesos) e paleta do quadro.
+    private let skinnedVertex: CajuShaderFunction
     private let whiteTexture: CajuTextureHandle
     private let sampler: CajuSamplerHandle
 
@@ -40,12 +43,25 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
     }
     private var pipelineIndex: [PipelineKey: UInt32] = [:]
     private var pipelines: [CajuRenderPipelineHandle] = []
+    /// Pipeline com *skinning* para o índice de pipeline comum (criado na primeira malha com pele).
+    private var skinnedPipelines: [UInt32: CajuRenderPipelineHandle] = [:]
+    private var skinnedShadowPipeline = CajuRenderPipelineHandle.null
+
+    /// Paleta de juntas do quadro (pose × inverseBind), um buffer por quadro em voo.
+    public let paletteCapacity: Int
+    private var paletteBuffers: [CajuBufferHandle] = []
+    private var paletteData: [CajuMat4] = []
+    /// Início da paleta de cada item do mundo de render no quadro (`UInt32.max` = ainda não calculada).
+    private var paletteBases: [UInt32] = []
 
     private struct ResidentMesh {
         var generation: UInt32
         var vertexBuffer: CajuBufferHandle
         var indexBuffer: CajuBufferHandle
         var indexCount: Int
+        /// Juntas e pesos (fluxo 1) e `inverseBind` por junta, só para malhas com *skinning*.
+        var skinBuffer: CajuBufferHandle?
+        var inverseBind: [CajuMat4]
     }
     private struct ResidentMaterial {
         var generation: UInt32
@@ -76,9 +92,11 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
 
     public init(
         device: Device, colorFormat: CajuPixelFormat, sampleCount: Int = 4, drawCapacity: Int = 4096,
-        residentCapacity: Int = 1024, shadowMapSize: Int = 1024
+        residentCapacity: Int = 1024, shadowMapSize: Int = 1024, paletteCapacity: Int = 8192
     ) throws(CajuRenderError) {
         self.shadowMapSize = max(shadowMapSize, 16)
+        self.paletteCapacity = max(paletteCapacity, 128)
+        paletteData.reserveCapacity(self.paletteCapacity)
         self.device = device
         self.colorFormat = colorFormat
         self.sampleCount = device.capabilities.sampleCounts.supports(sampleCount) ? sampleCount : 1
@@ -92,7 +110,8 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
         shadowInstances.reserveCapacity(drawList.capacity)
         do {
             let shaders: (vertex: CajuShaderModuleDescriptor, fragment: CajuShaderModuleDescriptor)
-            if device.capabilities.backendName == "Vulkan" {
+            let isVulkan = device.capabilities.backendName == "Vulkan"
+            if isVulkan {
                 shaders = (
                     CajuShaderModuleDescriptor(
                         format: .spirv, code: Self.bytes(CajuSceneShaderSPIRV.vertex), label: "scene.vert"),
@@ -112,6 +131,22 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
             vertex = CajuShaderFunction(module: vertexModule, entryPoint: isMetal ? "caju_scene_vs" : "main")
             fragment = CajuShaderFunction(
                 module: fragmentModule, entryPoint: isMetal ? "caju_scene_fs" : "main")
+            if isVulkan {
+                let module = try device.createShaderModule(
+                    CajuShaderModuleDescriptor(
+                        format: .spirv, code: Self.bytes(CajuSceneShaderSPIRV.skinnedVertex),
+                        label: "scene_skinned.vert"))
+                skinnedVertex = CajuShaderFunction(module: module, entryPoint: "main")
+            } else {
+                skinnedVertex = CajuShaderFunction(module: vertexModule, entryPoint: "caju_scene_skinned_vs")
+            }
+            for _ in 0..<Self.framesInFlight {
+                paletteBuffers.append(
+                    try device.createBuffer(
+                        CajuBufferDescriptor(
+                            size: self.paletteCapacity * MemoryLayout<CajuMat4>.stride, usage: .storage,
+                            storage: .shared, label: "scene.palette")))
+            }
             let white = try device.createTexture(
                 CajuTextureDescriptor(
                     format: .rgba8Unorm, width: 1, height: 1, usage: [.sampled, .copyDestination],
@@ -123,7 +158,7 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
                     try device.createBuffer(
                         CajuBufferDescriptor(
                             // Metade para o passe main, metade para os que projetam sombra.
-                            size: 2 * drawCapacity * MemoryLayout<InstanceData>.stride, usage: .storage,
+                            size: 2 * Self.shadowInstanceOffset(capacity: drawCapacity), usage: .storage,
                             storage: .shared,
                             label: "scene.instances")))
             }
@@ -144,6 +179,12 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
                     ],
                     colorTargets: [], depth: CajuDepthState(format: .depth32Float, compare: .lessEqual),
                     cullMode: .none, sampleCount: 1, label: "scene.shadow"))
+            skinnedShadowPipeline = try device.createRenderPipeline(
+                CajuRenderPipelineDescriptor(
+                    vertex: skinnedVertex, fragment: nil,
+                    vertexAttributes: Self.skinnedVertexAttributes, vertexLayouts: Self.skinnedVertexLayouts,
+                    colorTargets: [], depth: CajuDepthState(format: .depth32Float, compare: .lessEqual),
+                    cullMode: .none, sampleCount: 1, label: "scene.shadow.skinned"))
         } catch {
             throw .rhi(error)
         }
@@ -157,6 +198,10 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
         for index in meshes.indices { evictMesh(index: index) }
         for index in textures.indices { evictTexture(index: index) }
         for pipeline in pipelines { device.destroy(pipeline) }
+        for pipeline in skinnedPipelines.values { device.destroy(pipeline) }
+        device.destroy(skinnedShadowPipeline)
+        for buffer in paletteBuffers { device.destroy(buffer) }
+        if skinnedVertex.module != vertex.module { device.destroy(skinnedVertex.module) }
         device.destroy(whiteTexture)
         device.destroy(sampler)
         device.destroy(shadowPipeline)
@@ -164,6 +209,38 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
         device.destroy(shadowSampler)
         device.destroy(vertex.module)
         if fragment.module != vertex.module { device.destroy(fragment.module) }
+    }
+
+    /// Início da paleta do item `index` do mundo de render, calculando-a na primeira vez no quadro:
+    /// `pose[j] × inverseBind[j]` para cada junta. Sem pose válida (ou sem arena), a paleta é a identidade
+    /// e a malha aparece na pose de *bind*. Paleta cheia: usa a primeira (início 0), sem lançar.
+    private func palette(for index: Int, world: CajuRenderWorld, poses: CajuPoseArena?) -> UInt32 {
+        if paletteBases[index] != .max { return paletteBases[index] }
+        let handle = world.meshes[index]
+        guard let mesh = meshes[Int(handle.index)] else { return 0 }
+        let joints = mesh.inverseBind.count
+        guard joints > 0, paletteData.count + joints <= paletteCapacity else { return 0 }
+        let base = UInt32(paletteData.count)
+        let pose = world.poses[index]
+        var filled = false
+        if let poses, pose.isValid, Int(pose.jointCount) == joints {
+            let ok: Bool? = try? poses.withPoseBuffer(for: pose) { matrices in
+                for j in 0..<joints { paletteData.append(matrices[j] * mesh.inverseBind[j]) }
+                return true
+            }
+            filled = ok == true
+        }
+        if !filled {
+            for _ in 0..<joints { paletteData.append(.identity) }
+        }
+        paletteBases[index] = base
+        return base
+    }
+
+    /// Onde começam as instâncias do passe de sombra no buffer (alinhado a 256 bytes, o maior
+    /// `minStorageBufferOffsetAlignment` comum).
+    static func shadowInstanceOffset(capacity: Int) -> Int {
+        (capacity * MemoryLayout<InstanceData>.stride + 255) & ~255
     }
 
     /// Projeção ortográfica da luz que cobre a caixa de todos os itens do quadro (cascata única).
@@ -192,6 +269,20 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
             CajuVertexAttribute(location: 0, format: .float3, offset: 0, bufferIndex: 0),
             CajuVertexAttribute(location: 1, format: .float3, offset: 12, bufferIndex: 0),
             CajuVertexAttribute(location: 2, format: .float2, offset: 24, bufferIndex: 0),
+        ]
+    }
+
+    private static var skinnedVertexAttributes: [CajuVertexAttribute] {
+        vertexAttributes + [
+            CajuVertexAttribute(location: 3, format: .float4, offset: 0, bufferIndex: 1),
+            CajuVertexAttribute(location: 4, format: .float4, offset: 16, bufferIndex: 1),
+        ]
+    }
+
+    private static var skinnedVertexLayouts: [CajuVertexBufferLayout] {
+        [
+            CajuVertexBufferLayout(bufferIndex: 0, stride: CajuMeshVertexLayout.stride),
+            CajuVertexBufferLayout(bufferIndex: 1, stride: CajuMeshSkin.stride),
         ]
     }
 
@@ -249,6 +340,26 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
         return index
     }
 
+    /// Variante com *skinning* do pipeline `index` (mesmo estado, vértice com paleta).
+    private func skinnedPipeline(for index: UInt32) throws(CajuRenderError) -> CajuRenderPipelineHandle {
+        if let handle = skinnedPipelines[index] { return handle }
+        guard let key = pipelineIndex.first(where: { $0.value == index })?.key else {
+            throw .rhi(.invalidDescriptor(.missingShader))
+        }
+        let blended = key.alphaMode == .blend
+        let descriptor = CajuRenderPipelineDescriptor(
+            vertex: skinnedVertex, fragment: fragment,
+            vertexAttributes: Self.skinnedVertexAttributes, vertexLayouts: Self.skinnedVertexLayouts,
+            colorTargets: [CajuColorTargetState(format: colorFormat, blend: blended ? .alpha : nil)],
+            depth: CajuDepthState(format: depthFormat, compare: .less, writesDepth: !blended),
+            cullMode: key.doubleSided ? .none : .back, frontFace: .counterClockwise, sampleCount: sampleCount,
+            label: "scene.skinned")
+        let handle: CajuRenderPipelineHandle
+        do { handle = try device.createRenderPipeline(descriptor) } catch { throw .rhi(error) }
+        skinnedPipelines[index] = handle
+        return handle
+    }
+
     /// Pipelines criados até agora (o cenário de referência os cria na primeira carga).
     public var pipelineCount: Int { pipelines.count }
 
@@ -283,7 +394,8 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
         guard let mesh = assets.value(of: handle), mesh.isValid else { return }
         let vertexBytes = mesh.vertices.count * MemoryLayout<Float>.stride
         let indexBytes = mesh.indices.count * MemoryLayout<UInt32>.stride
-        guard uploadBudget.reserve(vertexBytes + indexBytes) else { return }
+        let skinBytes = (mesh.skin?.jointsAndWeights.count ?? 0) * MemoryLayout<Float>.stride
+        guard uploadBudget.reserve(vertexBytes + indexBytes + skinBytes) else { return }
         evictMesh(index: slot)
         do {
             let vertexBuffer = try device.createBuffer(
@@ -294,9 +406,18 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
             )
             try Self.writeBuffer(device, vertexBuffer, mesh.vertices)
             try Self.writeBuffer(device, indexBuffer, mesh.indices)
+            var skinBuffer: CajuBufferHandle?
+            if let skin = mesh.skin {
+                let buffer = try device.createBuffer(
+                    CajuBufferDescriptor(
+                        size: skinBytes, usage: .vertex, storage: .shared, label: "mesh.skin"))
+                try Self.writeBuffer(device, buffer, skin.jointsAndWeights)
+                skinBuffer = buffer
+            }
             meshes[slot] = ResidentMesh(
                 generation: handle.generation, vertexBuffer: vertexBuffer, indexBuffer: indexBuffer,
-                indexCount: mesh.indices.count)
+                indexCount: mesh.indices.count, skinBuffer: skinBuffer,
+                inverseBind: mesh.skin?.inverseBindMatrices ?? [])
         } catch {
             throw .rhi(error)
         }
@@ -359,6 +480,7 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
         guard index < meshes.count, let resident = meshes[index] else { return }
         device.destroy(resident.vertexBuffer)
         device.destroy(resident.indexBuffer)
+        if let skin = resident.skinBuffer { device.destroy(skin) }
         meshes[index] = nil
     }
 
@@ -384,7 +506,7 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
     /// do *swapchain*). Sem câmera, só limpa com preto.
     public func record(
         world: CajuRenderWorld, into commands: inout Device.Queue.CommandBuffer, target: CajuTextureHandle,
-        width: Int, height: Int
+        width: Int, height: Int, poses: CajuPoseArena? = nil
     ) throws(CajuRenderError) {
         let aspect = Float(max(width, 1)) / Float(max(height, 1))
         let view = world.makeView(aspect: aspect)
@@ -396,7 +518,6 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
                 guard meshSlot < meshes.count, let mesh = meshes[meshSlot],
                     mesh.generation == meshHandle.generation
                 else { return nil }
-                _ = mesh
                 var materialSlot = Int(materialHandle.index) + 1
                 if materialSlot >= materials.count
                     || materials[materialSlot]?.generation != materialHandle.generation
@@ -405,10 +526,11 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
                     materialSlot = 0
                 }
                 guard let material = materials[materialSlot] else { return nil }
+                // Malhas com *skinning* usam a variante do pipeline: bit 11 do campo de pipeline da chave.
                 return CajuResolvedDraw(
                     mesh: CajuRenderMeshID(index: meshHandle.index, generation: meshHandle.generation),
                     material: CajuRenderMaterialID(index: UInt32(materialSlot), generation: 1),
-                    queue: material.queue, pipeline: material.pipeline)
+                    queue: material.queue, pipeline: material.pipeline | (mesh.skinBuffer == nil ? 0 : 0x800))
             }
         }
 
@@ -440,16 +562,32 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
             throw .rhi(error)
         }
 
-        // Lotes de instâncias: itens consecutivos (já ordenados) com a mesma malha e material.
+        // Paletas de juntas (R-1b): calculadas sob demanda, uma vez por item do mundo de render no quadro.
+        paletteData.removeAll(keepingCapacity: true)
+        if paletteBases.count < world.capacity {
+            // Só aloca quando o mundo de render é maior que o do quadro anterior.
+            paletteBases = [UInt32](repeating: .max, count: world.capacity)
+        } else {
+            for i in 0..<world.count { paletteBases[i] = .max }
+        }
+
+        // Lotes de instâncias: itens consecutivos (já ordenados) com a mesma malha e material; malhas com
+        // *skinning* nunca entram em lote (cada uma tem a sua paleta).
         instanceData.removeAll(keepingCapacity: true)
         batches.removeAll(keepingCapacity: true)
         let sortedItems = drawList.items
         for (i, item) in sortedItems.enumerated() {
-            let model = world.worldMatrices[Int(item.instanceIndex)]
+            let index = Int(item.instanceIndex)
+            let model = world.worldMatrices[index]
+            let skinned = meshes[Int(item.mesh.index)]?.skinBuffer != nil
+            let base = skinned ? palette(for: index, world: world, poses: poses) : 0
             instanceData.append(
-                InstanceData(model: model, normalMatrix: model.inverseAffine?.transposed ?? model))
-            if let last = batches.last, sortedItems[last.item].mesh == item.mesh,
-                sortedItems[last.item].material == item.material
+                InstanceData(
+                    model: model, normalMatrix: model.inverseAffine?.transposed ?? model,
+                    skin: SIMD4(base, 0, 0, 0)))
+            if !skinned, let last = batches.last, sortedItems[last.item].mesh == item.mesh,
+                sortedItems[last.item].material == item.material,
+                meshes[Int(sortedItems[last.item].mesh.index)]?.skinBuffer == nil
             {
                 batches[batches.count - 1].count += 1
             } else {
@@ -462,6 +600,16 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
             do { try Self.writeBuffer(device, instanceBuffer, instanceData) } catch { throw .rhi(error) }
         }
         lastDrawCalls = view == nil ? 0 : batches.count
+
+        // Pipelines com *skinning* usados no quadro (criados fora do encoder; só na primeira vez).
+        for batch in batches {
+            let item = sortedItems[batch.item]
+            if meshes[Int(item.mesh.index)]?.skinBuffer != nil,
+                let material = materials[Int(item.material.index)]
+            {
+                _ = try skinnedPipeline(for: material.pipeline)
+            }
+        }
 
         // Passe `shadow` (R-1b): profundidade vista da luz, de tudo que projeta sombra (mesmo fora da tela).
         shadowInstances.removeAll(keepingCapacity: true)
@@ -480,8 +628,13 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
                     shadowInstances.count < drawList.capacity
                 else { continue }
                 let model = world.worldMatrices[i]
-                shadowInstances.append(InstanceData(model: model, normalMatrix: model))
-                if let last = shadowBatches.last, last.mesh == slot {
+                let skinned = resident.skinBuffer != nil
+                let base = skinned ? palette(for: i, world: world, poses: poses) : 0
+                shadowInstances.append(
+                    InstanceData(model: model, normalMatrix: model, skin: SIMD4(base, 0, 0, 0)))
+                if !skinned, let last = shadowBatches.last, last.mesh == slot,
+                    meshes[last.mesh]?.skinBuffer == nil
+                {
                     shadowBatches[shadowBatches.count - 1].count += 1
                 } else {
                     shadowBatches.append((first: shadowInstances.count - 1, count: 1, mesh: slot))
@@ -490,7 +643,11 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
             shadowEnabled = !shadowInstances.isEmpty
         }
         lastFrameHadShadow = shadowEnabled
-        let shadowOffset = drawList.capacity * MemoryLayout<InstanceData>.stride
+        let paletteBuffer = paletteBuffers[(frameIndex &- 1) % Self.framesInFlight]
+        if !paletteData.isEmpty {
+            do { try Self.writeBuffer(device, paletteBuffer, paletteData) } catch { throw .rhi(error) }
+        }
+        let shadowOffset = Self.shadowInstanceOffset(capacity: drawList.capacity)
         if shadowEnabled || !shadowMapInitialized {
             do {
                 if !shadowInstances.isEmpty {
@@ -502,17 +659,27 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
                         texture: .texture(shadowMap), load: .clear(SIMD4(1, 0, 0, 0)), store: .store),
                     label: "shadow")
                 let shadowPipeline = self.shadowPipeline
+                let skinnedShadowPipeline = self.skinnedShadowPipeline
                 let shadowBatches = self.shadowBatches
                 let meshes = self.meshes
                 try commands.withRenderPass(shadowPass) { encoder in
                     guard !shadowBatches.isEmpty else { return }
                     var lightVP = lightViewProjection
-                    encoder.setPipeline(shadowPipeline)
-                    withUnsafeBytes(of: &lightVP) { encoder.setBytes($0, index: 0, stage: .vertex) }
-                    encoder.setBuffer(instanceBuffer, offset: shadowOffset, index: 1, stage: .vertex)
+                    var boundSkinned: Bool?
                     for batch in shadowBatches {
                         guard let mesh = meshes[batch.mesh] else { continue }
+                        let skinned = mesh.skinBuffer != nil
+                        if boundSkinned != skinned {
+                            encoder.setPipeline(skinned ? skinnedShadowPipeline : shadowPipeline)
+                            withUnsafeBytes(of: &lightVP) { encoder.setBytes($0, index: 0, stage: .vertex) }
+                            encoder.setBuffer(instanceBuffer, offset: shadowOffset, index: 1, stage: .vertex)
+                            if skinned {
+                                encoder.setBuffer(paletteBuffer, offset: 0, index: 2, stage: .vertex)
+                            }
+                            boundSkinned = skinned
+                        }
                         encoder.setVertexBuffer(mesh.vertexBuffer, offset: 0, index: 0)
+                        if let skin = mesh.skinBuffer { encoder.setVertexBuffer(skin, offset: 0, index: 1) }
                         encoder.drawIndexed(
                             indexCount: mesh.indexCount, instanceCount: batch.count,
                             indexBuffer: mesh.indexBuffer,
@@ -537,6 +704,7 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
         let materials = self.materials
         let sampler = self.sampler
         let batches = self.batches
+        let skinnedPipelines = self.skinnedPipelines
         let shadowMap = self.shadowMap
         let shadowSampler = self.shadowSampler
         let shadowParams = SIMD4<Float>(shadowEnabled ? 1 : 0, 0.002, 1 / Float(shadowMapSize), 0)
@@ -562,11 +730,18 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
                     guard let mesh = meshes[Int(item.mesh.index)],
                         let material = materials[Int(item.material.index)]
                     else { continue }
-                    if material.pipeline != boundPipeline {
-                        encoder.setPipeline(pipelines[Int(material.pipeline)])
-                        boundPipeline = material.pipeline
+                    let skinned = mesh.skinBuffer != nil
+                    let pipelineKey = material.pipeline | (skinned ? 0x800 : 0)
+                    if pipelineKey != boundPipeline {
+                        let handle =
+                            skinned
+                            ? (skinnedPipelines[material.pipeline] ?? .null)
+                            : pipelines[Int(material.pipeline)]
+                        encoder.setPipeline(handle)
+                        boundPipeline = pipelineKey
                         withUnsafeBytes(of: &frame) { encoder.setBytes($0, index: 0, stage: .vertex) }
                         encoder.setBuffer(instanceBuffer, offset: 0, index: 1, stage: .vertex)
+                        if skinned { encoder.setBuffer(paletteBuffer, offset: 0, index: 2, stage: .vertex) }
                     }
                     let asset = material.asset
                     materialUniforms.baseColor = SIMD4(
@@ -576,6 +751,7 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
                         asset.metallic, asset.roughness, asset.alphaMode == .mask ? asset.alphaCutoff : 0,
                         asset.model == .pbr ? 1 : 0)
                     encoder.setVertexBuffer(mesh.vertexBuffer, offset: 0, index: 0)
+                    if let skin = mesh.skinBuffer { encoder.setVertexBuffer(skin, offset: 0, index: 1) }
                     withUnsafeBytes(of: &materialUniforms) {
                         encoder.setBytes($0, index: 0, stage: .fragment)
                     }
@@ -595,10 +771,12 @@ public final class CajuSceneRenderer<Device: CajuRenderDevice> {
     }
 }
 
-/// `Instance` dos shaders de cena (2 × `float4x4`, 128 bytes, layout std430).
+/// `Instance` dos shaders de cena (2 × `float4x4` + `uint4`, 144 bytes, layout std430).
 struct InstanceData {
     var model: CajuMat4
     var normalMatrix: CajuMat4
+    /// `x` = início da paleta de juntas (só malhas com *skinning*).
+    var skin = SIMD4<UInt32>(0, 0, 0, 0)
 }
 
 /// `MaterialUniforms` dos shaders de cena (8 × `float4` + `float4x4`, 192 bytes).
