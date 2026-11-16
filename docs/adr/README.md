@@ -22,6 +22,7 @@ Uma página curta por decisão. Formato: **Status**, **Contexto**, **Decisão**,
 | [0017](0017-parsers-de-assets-puros.md) | Parsers de assets em Swift puro; Basis/JPEG pixels fora | Aceito |
 | [0018](0018-bvh-e-primitivas-espaciais.md) | P-3: BVH dinâmica, primitivas espaciais e consultas sem alocação | Aceito |
 | [0019](0019-host-android-build-e-link.md) | Host Android: NativeActivity em Swift, `CVulkan` e link com o NDK | Aceito (link manual substituído pelo 0024) |
+| [0020](0020-gate-da-onda-0-5.md) | Resultado do gate de saída da Onda 0.5 (S-0): medidas e teto do `.apk` | Aceito (parcial) |
 | [0024](0024-vulkan-vma-e-sincronizacao.md) | Backend Vulkan do `CajuRHI`: VMA, ligação de recursos, layouts e swapchain | Aceito |
 | [0030](0030-macro-component.md) | Macro `@Component(id:)` com `swift-syntax` | Aceito |
 
