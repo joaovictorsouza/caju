@@ -43,6 +43,10 @@ public final class CajuRenderWorld {
     public private(set) var meshes: [CajuAssetHandle<CajuMeshAsset>]
     public private(set) var materials: [CajuAssetHandle<CajuMaterialAsset>]
     public private(set) var layerMasks: [UInt32]
+    /// A malha projeta sombra da luz direcional (R-1b).
+    public private(set) var castsShadow: [Bool]
+    /// Pose de *skinning* (referência na `CajuPoseArena`); inválida para malhas sem skinning (R-1b).
+    public private(set) var poses: [CajuSkinPose]
 
     /// Câmera do quadro (matriz de mundo da câmera e parâmetros); `nil` se a cena não tem câmera.
     public var camera: (transform: CajuMat4, camera: CajuCamera)?
@@ -59,11 +63,15 @@ public final class CajuRenderWorld {
         meshes = []
         materials = []
         layerMasks = []
+        castsShadow = []
+        poses = []
         worldMatrices.reserveCapacity(capacity)
         worldBounds.reserveCapacity(capacity)
         meshes.reserveCapacity(capacity)
         materials.reserveCapacity(capacity)
         layerMasks.reserveCapacity(capacity)
+        castsShadow.reserveCapacity(capacity)
+        poses.reserveCapacity(capacity)
     }
 
     /// Esvazia o quadro mantendo a memória.
@@ -74,6 +82,8 @@ public final class CajuRenderWorld {
         meshes.removeAll(keepingCapacity: true)
         materials.removeAll(keepingCapacity: true)
         layerMasks.removeAll(keepingCapacity: true)
+        castsShadow.removeAll(keepingCapacity: true)
+        poses.removeAll(keepingCapacity: true)
         camera = nil
         light = nil
     }
@@ -81,7 +91,8 @@ public final class CajuRenderWorld {
     /// Acrescenta uma malha ao quadro (a extração usa isto; testes também).
     public func append(
         world: CajuMat4, localBounds: CajuAABB, mesh: CajuAssetHandle<CajuMeshAsset>,
-        material: CajuAssetHandle<CajuMaterialAsset>, layerMask: UInt32 = 1
+        material: CajuAssetHandle<CajuMaterialAsset>, layerMask: UInt32 = 1, castsShadow: Bool = true,
+        pose: CajuSkinPose = CajuSkinPose()
     ) throws(CajuRenderError) {
         guard count < capacity else { throw .capacityExceeded(.meshes) }
         worldMatrices.append(world)
@@ -89,6 +100,8 @@ public final class CajuRenderWorld {
         meshes.append(mesh)
         materials.append(material)
         layerMasks.append(layerMask)
+        self.castsShadow.append(castsShadow)
+        poses.append(pose)
         count += 1
     }
 
@@ -100,15 +113,23 @@ public final class CajuRenderWorld {
     public func extract(from world: CajuWorld, assets: some CajuAssetServing) throws(CajuRenderError) {
         clear()
         var overflow = false
-        world.forEach(CajuRead<CajuGlobalTransform>.self, CajuRead<CajuRenderMesh>.self) { transform, mesh in
+        func add(_ transform: CajuGlobalTransform, _ mesh: CajuRenderMesh, _ pose: CajuSkinPose) {
             guard !overflow else { return }
             let bounds = assets.value(of: mesh.mesh)?.bounds ?? Self.pendingBounds
             do throws(CajuRenderError) {
                 try append(
                     world: transform.matrix, localBounds: bounds, mesh: mesh.mesh, material: mesh.material,
-                    layerMask: mesh.layerMask)
+                    layerMask: mesh.layerMask, castsShadow: mesh.castsShadow, pose: pose)
             } catch { overflow = true }
         }
+        // Sem pose primeiro, depois as com pose (sem alocar: máscara montada à mão).
+        let noPose = CajuQueryFilter(withoutComponents: CajuComponentMask(bits: CajuSkinPose.componentID.bit))
+        world.forEach(CajuRead<CajuGlobalTransform>.self, CajuRead<CajuRenderMesh>.self, filter: noPose) {
+            transform, mesh in add(transform, mesh, CajuSkinPose())
+        }
+        world.forEach(
+            CajuRead<CajuGlobalTransform>.self, CajuRead<CajuRenderMesh>.self, CajuRead<CajuSkinPose>.self
+        ) { transform, mesh, pose in add(transform, mesh, pose) }
         if overflow { throw .capacityExceeded(.meshes) }
 
         var best: (CajuMat4, CajuCamera)?

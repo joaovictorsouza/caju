@@ -1,5 +1,6 @@
 import CajuAssets
 import CajuMath
+import CajuScene
 
 #if canImport(Darwin)
     import Darwin
@@ -19,16 +20,49 @@ public enum CajuMeshVertexLayout {
     public static let stride = floatsPerVertex * MemoryLayout<Float>.stride
 }
 
-/// Malha em CPU: vértices intercalados (`CajuMeshVertexLayout`), índices de 32 bits e caixa local.
+/// Dados de *skinning* de uma malha (R-1b): por vértice, 4 índices de junta (como `Float`) e 4 pesos,
+/// intercalados (8 `Float`); e o `inverseBind` de cada junta. A pose vem do AN-1 em espaço do modelo
+/// (`CajuSkinPose`/`CajuPoseArena`); o render multiplica pelo `inverseBind` (ADR 0023, 0027).
+public struct CajuMeshSkin: Sendable, Equatable {
+    public static let floatsPerVertex = 8
+    public static var stride: Int { floatsPerVertex * MemoryLayout<Float>.stride }
+
+    public var jointsAndWeights: [Float]
+    public var inverseBindMatrices: [CajuMat4]
+
+    public init(jointsAndWeights: [Float], inverseBindMatrices: [CajuMat4]) {
+        self.jointsAndWeights = jointsAndWeights
+        self.inverseBindMatrices = inverseBindMatrices
+    }
+
+    public var jointCount: Int { inverseBindMatrices.count }
+
+    /// Todos os vértices com peso 1 na junta `joint` (malha rígida presa a uma junta).
+    public static func rigid(vertexCount: Int, joint: Int = 0, inverseBindMatrices: [CajuMat4])
+        -> CajuMeshSkin
+    {
+        var data = [Float](repeating: 0, count: vertexCount * floatsPerVertex)
+        for v in 0..<vertexCount {
+            data[v * floatsPerVertex] = Float(joint)
+            data[v * floatsPerVertex + 4] = 1
+        }
+        return CajuMeshSkin(jointsAndWeights: data, inverseBindMatrices: inverseBindMatrices)
+    }
+}
+
+/// Malha em CPU: vértices intercalados (`CajuMeshVertexLayout`), índices de 32 bits, caixa local e,
+/// opcionalmente, *skinning*.
 public struct CajuMeshAsset: CajuAsset, Equatable {
     public var vertices: [Float]
     public var indices: [UInt32]
     public var bounds: CajuAABB
+    public var skin: CajuMeshSkin?
 
-    public init(vertices: [Float], indices: [UInt32], bounds: CajuAABB) {
+    public init(vertices: [Float], indices: [UInt32], bounds: CajuAABB, skin: CajuMeshSkin? = nil) {
         self.vertices = vertices
         self.indices = indices
         self.bounds = bounds
+        self.skin = skin
     }
 
     /// Quantidade de vértices.
@@ -41,6 +75,18 @@ public struct CajuMeshAsset: CajuAsset, Equatable {
         else { return false }
         let limit = UInt32(truncatingIfNeeded: vertexCount)
         for index in indices where index >= limit { return false }
+        if let skin {
+            guard skin.jointsAndWeights.count == vertexCount * CajuMeshSkin.floatsPerVertex,
+                skin.jointCount > 0, skin.jointCount <= Int(CajuPoseArena.maxJointCount)
+            else { return false }
+            let maxJoint = Float(skin.jointCount - 1)
+            for v in 0..<vertexCount {
+                for k in 0..<4 {
+                    let joint = skin.jointsAndWeights[v * CajuMeshSkin.floatsPerVertex + k]
+                    guard joint >= 0, joint <= maxJoint, joint == joint.rounded() else { return false }
+                }
+            }
+        }
         return true
     }
 }
@@ -127,6 +173,20 @@ extension CajuMeshAsset {
         let extent = CajuVec3(h, h, h)
         return CajuMeshAsset(
             vertices: vertices, indices: indices, bounds: CajuAABB(min: -extent, max: extent))
+    }
+
+    /// Plano quadrado de lado `size` no plano XZ, normal `+Y`, centrado na origem.
+    public static func plane(size: Float = 1) -> CajuMeshAsset {
+        let h = size / 2
+        let vertices: [Float] = [
+            -h, 0, h, 0, 1, 0, 0, 1,
+            h, 0, h, 0, 1, 0, 1, 1,
+            h, 0, -h, 0, 1, 0, 1, 0,
+            -h, 0, -h, 0, 1, 0, 0, 0,
+        ]
+        return CajuMeshAsset(
+            vertices: vertices, indices: [0, 1, 2, 0, 2, 3],
+            bounds: CajuAABB(min: CajuVec3(-h, -0.001, -h), max: CajuVec3(h, 0.001, h)))
     }
 
     /// Esfera UV de raio `radius` (`segments` meridianos, `rings` paralelos), normais suaves.

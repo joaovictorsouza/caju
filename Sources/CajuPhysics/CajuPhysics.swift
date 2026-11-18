@@ -1,5 +1,5 @@
-/// Integração de física com o ECS.
+/// Marcador do módulo `CajuPhysics` mantido para verificação de linkagem.
 ///
-/// Módulo declarado no M0; a implementação chega na trilha dona deste diretório
-/// (ver `docs/planejamento-engine.md`). Este tipo existe só para o alvo compilar.
+/// A API real (consultas no ECS, picking e kinematic) está em `CajuPhysicsScene`, `CajuCollider`
+/// e `CajuPhysics` (espaço de nomes dos sistemas).
 public enum CajuPhysicsModule {}

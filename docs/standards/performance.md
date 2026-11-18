@@ -30,15 +30,20 @@ Fonte: `Tests/CajuModulesTests/CajuFrameGraphBenchmarkTests.swift` e `CajuMetalT
 - 50 ciclos de background/resume (recriação de superfície com tamanho alternado, Metal, `CAMetalLayer` sem janela): ΔRSS = 0,14 MB (gate ADR 0006: ≤ 1 MB), recursos vivos constantes.
 - O benchmark roda como teste porque `caju-bench` depende de `Package.swift` (trancado); migrar para o executável é PR dedicado. Números de aparelho (iPhone 16 Pro, S22+) e p95 de quadro: `(?)`. Alocação por quadro do executor no estado estável não foi medida `(?)`.
 
-## R-1: metas propostas do render (contrato; **nenhuma medida ainda**, tudo `(?)`)
-- Extração de 1 000 entidades < 0,5 ms de CPU no aparelho alto; ordenação da draw list de 1 000 itens sem alocação.
-- ≤ 300 draw calls por quadro de cena (instancing em R-1b); zero alocação por quadro estável no `CajuRenderWorld`.
-- Benchmarks da extração e do *sort* entram com R-1a ([ADR 0023](../adr/0023-mundo-de-render-e-extracao.md)).
+## R-1: render (`CajuRender`, [ADR 0023](../adr/0023-mundo-de-render-e-extracao.md))
+- **Meta:** extração de 1 000 entidades < 0,5 ms de CPU no aparelho alto `(?)`; ≤ 300 draw calls por quadro de cena (instancing em R-1b).
+- **Medido (Mac M-series, `caju-bench` release, 2026-11-16):** `render.extract` 81 ns/entidade (1 000 e 10 000, ou seja 0,08 ms para 1 000); `render.drawList(cull+sort)` 12 ns/item (1 000) e 33 ns/item (10 000). Aparelho `(?)`.
+- **Zero alocação no quadro estável** da extração e da draw list: teste `CajuRenderAllocationTests` (blocos do `malloc` não crescem em 200 quadros, Darwin).
+- **Instancing (R-1b):** 100 malhas iguais = 1 draw call (`CajuSceneRenderer.lastDrawCalls`; o passe de sombra não entra na conta). Draw calls em cena real no aparelho `(?)`.
 
 ## AN-1: amostragem SIMD de animação (`CajuAnim`)
 - Zero alocação por quadro estável (`CajuAnimScratchBuffer` e `CajuPoseArena` com capacidade reservada) para esqueletos até 128 juntas `(?)`.
 - Benchmark simples em `Tests/CajuModulesTests/CajuAnimBenchmarkTests.swift` (32 e 128 juntas, amostragem simples e *crossfade*, 1 000 iterações; roda como teste porque `caju-bench` depende de `Package.swift` trancado). Metas e medidas nos aparelhos de referência (iPhone 16 Pro, Galaxy S22+): `(?)`.
 
+
+## PH-1: consultas de física no ECS (`CajuPhysics`)
+- Zero alocação por consulta (`raycast`, `raycastAll`, `overlapSphere`, `spherecast`, `pick`): pilha de travessia reutilizada e *visitors* não escapantes; verificado por contagem de blocos de `malloc` em `CajuPhysicsSceneTests` (macOS). `sync` pode alocar ao crescer tabelas.
+- `raycast` percorre todos os candidatos por AABB (a BVH não encurta o raio ao achar um impacto mais próximo); custo medido e meta em aparelho: `(?)`.
 
 ## S-0: linhas de base em aparelho (medidas 2026-11-15)
 Detalhes e comandos em `docs/evidencias/s0-android/` (Galaxy S22+, SM-S906E, Android 16) e `docs/evidencias/s0-ios/` (iPhone 16 Pro). Mediana de 5 execuções; razão S22+/Mac M1 em parênteses.

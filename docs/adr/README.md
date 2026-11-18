@@ -4,10 +4,6 @@ Uma página curta por decisão. Formato: **Status**, **Contexto**, **Decisão**,
 
 | ADR | Tema | Status |
 |---|---|---|
-
-**Números reservados:** 0016 (P-1, nunca escrito, não reutilizar); 0020 a 0029 para a Onda 1 (0021 já em uso pela A-1) (ver [briefs/onda-1.md](../briefs/onda-1.md)); usar só se houver decisão. O 0030 é da macro `@Component` (PR #20, fora das trilhas da Onda 1).
-
-**Números reservados:** 0016 (P-1, nunca escrito, não reutilizar); 0021, 0022, 0024 a 0026, 0028 e 0029 para a Onda 1 (0023 já usado: R-1; 0027 já usado: AN-1) (ver [briefs/onda-1.md](../briefs/onda-1.md)); usar só se houver decisão. O 0030 é da macro `@Component` (PR #20, fora das trilhas da Onda 1).
 | [0001](0001-rhi-proprio.md) | GPU: RHI próprio (Metal + Vulkan) e Slang | Aceito |
 | [0002](0002-ui-declarativa.md) | UI declarativa e reatividade | Aceito |
 | [0003](0003-ecs-e-agendador.md) | ECS híbrido e agendador single-thread primeiro | Aceito |
@@ -28,11 +24,14 @@ Uma página curta por decisão. Formato: **Status**, **Contexto**, **Decisão**,
 | [0019](0019-host-android-build-e-link.md) | Host Android: NativeActivity em Swift, `CVulkan` e link com o NDK | Aceito (link manual substituído pelo 0024) |
 | [0020](0020-gate-da-onda-0-5.md) | Resultado do gate de saída da Onda 0.5 (S-0): medidas e teto do `.apk` | Aceito (parcial) |
 | [0021](0021-assets-handles-e-ciclo-de-vida.md) | Assets: handles geracionais, estados de carga e ciclo de vida (A-1) | Aceito |
-| [0023](0023-mundo-de-render-e-extracao.md) | R-1: mundo de render separado, extração e draw list | Proposto |
+| 0022 | A-2: JPEG e Zstd em Swift puro (ADR na trilha `integracao/a-2`, ainda não integrado aqui) | Ver a trilha |
+| [0023](0023-mundo-de-render-e-extracao.md) | R-1: mundo de render separado, extração e draw list | Aceito (R-1a e R-1b implementadas) |
 | [0024](0024-vulkan-vma-e-sincronizacao.md) | Backend Vulkan do `CajuRHI`: VMA, ligação de recursos, layouts e swapchain | Aceito |
+| 0025 | I-1: sem ADR (nenhuma decisão nova de modelo de eventos) | Não escrito |
 | [0026](0026-ui-display-list-e-dsl.md) | Display list da UI e contrato da DSL (U-1) | Proposto |
 | [0027](0027-formato-de-pose-e-fronteira-r1b.md) | AN-1: formato de pose em espaço do modelo, arena e fronteira com R-1b | Proposto |
 | [0028](0028-audio-miniaudio.md) | Política de áudio e dependência sobre miniaudio (AU-1) | Aceito |
+| 0029 | PH-1/T-1: sem ADR (nenhuma decisão nova) | Não escrito |
 | [0030](0030-macro-component.md) | Macro `@Component(id:)` com `swift-syntax` | Aceito |
 
-**Números reservados:** 0016 (P-1, nunca escrito, não reutilizar); 0020 a 0029 para a Onda 1 (ver [briefs/onda-1.md](../briefs/onda-1.md)); usar só se houver decisão (0026 já em uso, Proposto, pelo contrato U-1). O 0030 é da macro `@Component` (PR #20, fora das trilhas da Onda 1).
+**Números reservados:** 0016 (P-1, nunca escrito, não reutilizar). Onda 1 (ver [briefs/onda-1.md](../briefs/onda-1.md)): 0020 (gate S-0), 0021 (A-1), 0023 (R-1) e 0024 (V-1) em uso, 0026 (U-1), 0027 (AN-1) e 0028 (AU-1) em uso, 0022 (A-2) escrito na trilha `integracao/a-2`, ainda fora desta branch; 0025 (I-1) e 0029 (PH-1/T-1) sem ADR porque não houve decisão nova (não reutilizar). O 0030 é da macro `@Component` (PR #20, fora das trilhas da Onda 1).

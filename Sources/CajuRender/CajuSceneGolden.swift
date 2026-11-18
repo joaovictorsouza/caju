@@ -1,9 +1,11 @@
 import CajuAssets
 import CajuMath
 import CajuRHI
+import CajuScene
 
-/// Golden de cena da R-1a, igual em todo backend (Metal nos testes, Vulkan no aparelho): cubo `unlit`
-/// vermelho girado à esquerda e esfera PBR azulada à direita, luz direcional e ambiente, 64x64, MSAA 4x.
+/// Golden de cena da R-1, igual em todo backend (Metal nos testes, Vulkan no aparelho): cubo `unlit`
+/// vermelho girado à esquerda, esfera PBR azulada à direita e chão cinza com a sombra delas (R-1b), luz
+/// direcional e ambiente, 64x64, MSAA 4x.
 ///
 /// A referência (`CajuSceneGoldenData.samples`) foi gravada do Metal; os outros backends têm de bater nela
 /// dentro da tolerância. Pontos exatos (fundo e centro do cubo `unlit`) não têm tolerância.
@@ -29,13 +31,16 @@ public enum CajuSceneGolden {
             CajuMaterialAsset(
                 model: .pbr, baseColor: CajuColor(r: 0.2, g: 0.5, b: 1), metallic: 0, roughness: 0.4))
 
+        let ground = assets.put(CajuMeshAsset.plane(size: 6))
+        let grey = assets.put(CajuMaterialAsset(baseColor: CajuColor(r: 0.6, g: 0.6, b: 0.6), roughness: 0.9))
         let world = CajuRenderWorld(capacity: 4)
         world.camera = (
             .translation(CajuVec3(0, 0, 3)),
             CajuCamera(fovY: .pi / 3, near: 0.1, far: 20, clearColor: clear)
         )
         world.light = CajuDirectionalLight(
-            direction: CajuVec3(-1, -1, -1).normalized() ?? CajuVec3(0, -1, 0), intensity: 3)
+            direction: CajuVec3(0.5, -1, 0.6).normalized() ?? CajuVec3(0, -1, 0), intensity: 3,
+            castsShadow: true)
         world.ambient = CajuColor(r: 0.05, g: 0.05, b: 0.05)
         let spin =
             (CajuQuat(axis: CajuVec3(0, 1, 0), radians: 0.6) ?? .identity)
@@ -47,6 +52,11 @@ public enum CajuSceneGolden {
         try world.append(
             world: .translation(CajuVec3(0.75, 0, 0)), localBounds: CajuMeshAsset.sphere(radius: 0.55).bounds,
             mesh: sphere, material: blue)
+        // Chão que recebe a sombra (R-1b) e não projeta.
+        try world.append(
+            world: .translation(CajuVec3(0, -0.7, 0)), localBounds: CajuMeshAsset.plane(size: 6).bounds,
+            mesh: ground,
+            material: grey, castsShadow: false)
 
         let renderer = try CajuSceneRenderer(device: device, colorFormat: .bgra8Unorm, sampleCount: 4)
         try renderer.prepare(world: world, assets: assets)
@@ -63,6 +73,91 @@ public enum CajuSceneGolden {
         do {
             var commands = try device.queue.makeCommandBuffer(label: "golden")
             try renderer.record(world: world, into: &commands, target: target, width: side, height: side)
+            try device.queue.submit(commands)
+            try device.queue.waitUntilIdle()
+            let bytes = try read(target)
+            device.destroy(target)
+            return bytes
+        } catch let error as CajuRenderError {
+            throw error
+        } catch {
+            throw .rhi(error as? CajuRHIError ?? .outOfMemory)
+        }
+    }
+
+    /// *Skinning* (R-1b), independente de backend: um cubo com pele rígida (peso 1 na junta 0, `inverseBind`
+    /// = translação) posado pela arena tem de sair igual ao mesmo cubo sem pele com a matriz de mundo
+    /// `pose × inverseBind`. Devolve os problemas (vazio = passou).
+    public static func checkSkinningEquivalence<Device: CajuRenderDevice>(
+        device: Device, read: (CajuTextureHandle) throws(CajuRHIError) -> [UInt8]
+    ) throws(CajuRenderError) -> [String] {
+        let inverseBind = CajuMat4.translation(CajuVec3(-0.4, 0, 0))
+        let pose =
+            CajuMat4.translation(CajuVec3(0.4, 0.1, 0))
+            * .rotation(
+                CajuQuat(axis: CajuVec3(0.3, 1, 0.2).normalized() ?? CajuVec3(0, 1, 0), radians: 0.9)
+                    ?? .identity)
+        var skinnedCube = CajuMeshAsset.cube(size: 1)
+        skinnedCube.skin = .rigid(vertexCount: skinnedCube.vertexCount, inverseBindMatrices: [inverseBind])
+        let arena = CajuPoseArena(matrixCapacity: 16)
+        var skinPose: CajuSkinPose
+        do {
+            skinPose = try arena.allocate(jointCount: 1)
+            try arena.withMutablePoseBuffer(for: &skinPose) { $0[0] = pose }
+        } catch {
+            return ["arena: \(error)"]
+        }
+
+        func image(skinned: Bool) throws(CajuRenderError) -> [UInt8] {
+            let assets = GoldenAssets()
+            let mesh = assets.put(skinned ? skinnedCube : CajuMeshAsset.cube(size: 1))
+            let material = assets.put(
+                CajuMaterialAsset(model: .pbr, baseColor: CajuColor(r: 0.9, g: 0.6, b: 0.2), roughness: 0.5))
+            let world = CajuRenderWorld(capacity: 2)
+            world.camera = (
+                .translation(CajuVec3(0, 0, 3)), CajuCamera(near: 0.1, far: 20, clearColor: clear)
+            )
+            world.light = CajuDirectionalLight(
+                direction: CajuVec3(-0.3, -1, -0.5).normalized() ?? CajuVec3(0, -1, 0), intensity: 3)
+            let bounds = CajuAABB(min: CajuVec3(-2, -2, -2), max: CajuVec3(2, 2, 2))
+            try world.append(
+                world: skinned ? .identity : pose * inverseBind, localBounds: bounds, mesh: mesh,
+                material: material, pose: skinned ? skinPose : CajuSkinPose())
+            return try renderOffscreen(device: device, world: world, assets: assets, poses: arena, read: read)
+        }
+        let skinned = try image(skinned: true)
+        let reference = try image(skinned: false)
+        var different = 0
+        for i in 0..<skinned.count where abs(Int(skinned[i]) - Int(reference[i])) > 2 { different += 1 }
+        let lit = (0..<(reference.count / 4)).filter { reference[$0 * 4 + 2] > 40 }.count
+        var problems: [String] = []
+        if different > 12 {
+            problems.append("\(different) canais diferem entre a malha com pele e a referência")
+        }
+        if lit < 200 { problems.append("cubo quase invisível na referência (\(lit) pixels)") }
+        return problems
+    }
+
+    /// Desenha um mundo de render num alvo 64x64 `bgra8Unorm` `shared` e devolve os bytes.
+    static func renderOffscreen<Device: CajuRenderDevice>(
+        device: Device, world: CajuRenderWorld, assets: GoldenAssets, poses: CajuPoseArena?,
+        read: (CajuTextureHandle) throws(CajuRHIError) -> [UInt8]
+    ) throws(CajuRenderError) -> [UInt8] {
+        let renderer = try CajuSceneRenderer(device: device, colorFormat: .bgra8Unorm, sampleCount: 4)
+        try renderer.prepare(world: world, assets: assets)
+        let target: CajuTextureHandle
+        do {
+            target = try device.createTexture(
+                CajuTextureDescriptor(
+                    format: .bgra8Unorm, width: side, height: side,
+                    usage: [.renderTarget, .sampled, .copySource], storage: .shared, label: "golden"))
+        } catch {
+            throw .rhi(error)
+        }
+        do {
+            var commands = try device.queue.makeCommandBuffer(label: "golden")
+            try renderer.record(
+                world: world, into: &commands, target: target, width: side, height: side, poses: poses)
             try device.queue.submit(commands)
             try device.queue.waitUntilIdle()
             let bytes = try read(target)

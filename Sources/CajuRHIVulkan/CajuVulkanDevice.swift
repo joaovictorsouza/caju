@@ -398,18 +398,13 @@
             guard !d.code.isEmpty, d.format == .spirv, d.code.count % 4 == 0 else {
                 throw .invalidDescriptor(.missingShader)
             }
-            let bindings: [CajuVulkanShaderReflection.Binding]
-            do {
-                bindings = try d.code.withUnsafeBytes {
-                    raw throws(CajuVulkanShaderReflection.ReflectionError) in
-                    try CajuVulkanShaderReflection.bindings(
-                        UnsafeBufferPointer(
-                            start: raw.baseAddress?.assumingMemoryBound(to: UInt32.self), count: raw.count / 4
-                        ))
-                }
-            } catch {
-                throw .invalidDescriptor(.missingShader)
+            // Sem `throws` tipado no *closure* (o Swift 6.2 cai ao converter para `withUnsafeBytes`).
+            let reflected: [CajuVulkanShaderReflection.Binding]? = d.code.withUnsafeBytes { raw in
+                try? CajuVulkanShaderReflection.bindings(
+                    UnsafeBufferPointer(
+                        start: raw.baseAddress?.assumingMemoryBound(to: UInt32.self), count: raw.count / 4))
             }
+            guard let bindings = reflected else { throw .invalidDescriptor(.missingShader) }
             var module: VkShaderModule?
             let result: VkResult = d.code.withUnsafeBytes { raw in
                 var info = VkShaderModuleCreateInfo()

@@ -95,7 +95,7 @@ jobs:
           swift sdk list
           setup="$(find "$HOME/.swiftpm" "$HOME/.config/swiftpm" -maxdepth 6 -name setup-android-sdk.sh -path '*swift-android*' 2>/dev/null | head -n 1)"
           echo "setup: $setup"
-          ANDROID_NDK_HOME="$ANDROID_HOME/ndk/$NDK_VERSION" sh "$setup"
+          ANDROID_NDK_HOME="$ANDROID_HOME/ndk/$NDK_VERSION" bash "$setup"  # usa [[ ]]: bash, não dash
       - name: APK (assembleDebug)
         run: cd Hosts/Android && ./gradlew --no-daemon :app:assembleDebug
       - uses: actions/upload-artifact@v4

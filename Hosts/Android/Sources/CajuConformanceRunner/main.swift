@@ -74,6 +74,17 @@
             sceneClean = false
             emit("FALHOU sceneGoldenR1a: erro \(error)")
         }
+        // Skinning da R-1b: pele rígida posada = mesma malha transformada.
+        do {
+            let problems = try CajuSceneGolden.checkSkinningEquivalence(device: device) {
+                texture throws(CajuRHIError) in try device.readTexture(texture)
+            }
+            if !problems.isEmpty { sceneClean = false }
+            emit(problems.isEmpty ? "PASSOU skinningR1b" : "FALHOU skinningR1b: \(problems)")
+        } catch {
+            sceneClean = false
+            emit("FALHOU skinningR1b: erro \(error)")
+        }
         emit(
             "recursos vivos=\(device.liveResourceCount) destruição pendente=\(device.pendingDestructionCount) "
                 + "bytes VMA=\(device.allocatedBytes)")
