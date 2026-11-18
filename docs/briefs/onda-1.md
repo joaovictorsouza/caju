@@ -72,7 +72,7 @@ Depois do gate: **vertical slice** (personagem animado, UI de loja, câmera, toq
 - **Swift indisponível no ambiente de nuvem:** testes rodam no Mac ou no CI; números ficam `(?)` até medir.
 
 ## 7. ADRs reservados
-0020 gate/S-0 (escrito), 0021 A-1, 0022 A-2, 0023 R-1, 0024 V-1, 0025 I-1, 0026 U-1, 0027 AN-1, 0028 AU-1, 0029 PH-1/T-1 (reserva; usar só se houver decisão). Quem não tomar decisão nova não escreve ADR.
+0020 gate/S-0 (escrito), 0021 A-1 (escrito), 0022 A-2 (escrito na trilha `integracao/a-2`), 0023 R-1 (escrito), 0024 V-1 (escrito), 0025 I-1 (sem ADR), 0026 U-1 (escrito, Proposto), 0027 AN-1 (escrito), 0028 AU-1 (escrito), 0029 PH-1/T-1 (sem ADR); reserva, usar só se houver decisão. Estado em 2026-11-18, ver `docs/adr/README.md`. Quem não tomar decisão nova não escreve ADR.
 
 ## 8. Documentos que este brief atualiza (neste PR)
 Plano (§8 "Onda 1": link para este brief e ordem) e `docs/adr/README.md` (nota dos números reservados). Cada trilha atualiza plano, ADR, standards e README do módulo no próprio PR.

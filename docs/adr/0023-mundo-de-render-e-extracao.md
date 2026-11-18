@@ -1,6 +1,6 @@
 # ADR 0023: Mundo de render separado, extração e draw list (R-1)
 
-**Status:** Aceito (contrato mergeado no PR #39 da Onda 1; R-1a implementada em 2026-11-16, ver "Implementação da R-1a"). Implementa o ADR 0001 (RHI próprio) e o ADR 0015 (frame graph); não os substitui.
+**Status:** Aceito (contrato mergeado no PR #39 da Onda 1; R-1a e R-1b implementadas, ver "Implementação da R-1a" e a da R-1b). Implementa o ADR 0001 (RHI próprio) e o ADR 0015 (frame graph); não os substitui.
 
 ## Contexto
 A Onda 1 ([brief](../briefs/onda-1.md)) pede render completo no `CajuRender`: unlit + PBR simples, luz direcional, 1 sombra, instancing e skinning, sobre o RHI e o frame graph do ADR 0015. A-1 (handles), AN-1 (pose) e U-1b (passe de UI) dependem do formato que R-1 decidir, então o contrato precisa sair antes do código. Detalhe e tabelas: [briefs/r-1-contrato.md](../briefs/r-1-contrato.md).
